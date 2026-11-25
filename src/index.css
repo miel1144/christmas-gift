@@ -1,0 +1,43 @@
+/* Paleta del prompt original: atardecer gris azulado, no negro */
+:root {
+  --bg-top: #323a47;
+  --bg-mid: #394250;
+  --bg-low: #4b5463;
+  --bg-bottom: #666e7d;
+  --snow: rgb(248, 250, 255);
+  --tree: hsl(150, 60%, 45%);
+  --star: hsl(44, 66%, 75%);
+  --fail: hsl(354, 80%, 65%);
+  --font: Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg-bottom);
+  color: var(--snow);
+  font-family: var(--font);
+  font-weight: bold;
+}
+
+.stage {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 16px;
+  background: linear-gradient(var(--bg-top) 0%, var(--bg-mid) 55%, var(--bg-low) 86%, var(--bg-bottom) 100%);
+}
+
+.tree { color: var(--tree); margin: 0; line-height: 1.1; }
+
+.status { list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
+.status .ok { color: var(--tree); }
+.status .fail { color: var(--fail); }
+.status .pending { opacity: 0.5; }
+
+.errors { color: var(--fail); font-size: 0.8rem; white-space: pre-wrap; max-width: 100%; }
