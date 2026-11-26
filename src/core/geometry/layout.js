@@ -23,5 +23,6 @@ export function stageLayout({ cols, rows, aspect, panelCols }) {
     treeRows: yBase - yTop,
     floorRow: rows * 0.845, // centro del mandala del suelo
     tilt: 0.17 * aspect,
+    floorTilt: 0.28 * aspect, // cuánto se aplasta el suelo (mandala y regalos)
   };
 }

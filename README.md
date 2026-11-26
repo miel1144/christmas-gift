@@ -7,7 +7,7 @@ Mini app social navideña hecha de caracteres. Entras a una **sala** (pública o
 ## De qué trata
 
 - **Salas:** cada usuario crea salas públicas, a las que entra cualquiera, o privadas, a las que se entra por invitación.
-- **Intro de la sala:** una secuencia ASCII por etapas. Cae una luz, se extiende el disco, crece el árbol, se abre la estrella y se encienden las luces. Luego aparecen los regalos de la sala y un reno. Cada etapa avanza con un gesto de la mano o con el teclado; sin cámara, se reproduce sola.
+- **Intro de la sala:** una secuencia ASCII en tres pasos: (1) cae una luz y se abre el disco del suelo, (2) crece el árbol y se enciende la estrella, (3) se encienden las luces y aparecen los regalos de la sala. Cada paso avanza con un gesto de la mano o con el teclado; sin cámara, se reproduce sola.
 - **Regalos:** quedan en un anillo alrededor del árbol y giran con él. Solo el destinatario puede abrirlos.
 - **Tiempo real:** los regalos nuevos y la gente presente en la sala se actualizan en vivo.
 - **Control:** ratón, tacto y teclado como base; el seguimiento de manos con la webcam es una capa opcional.

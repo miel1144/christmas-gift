@@ -44,3 +44,16 @@ export function rainbowHue(c) {
 export const isWarm = (h) => h > 26 && h < 80;
 /** Los amarillos se desplazan hacia un ámbar más sobrio (el amarillo puro deslumbra). */
 export const amber = (h) => (isWarm(h) ? Math.round(38 + (h - 26) * 0.22) : h);
+
+// --- Curvas de animación ---
+/** Sale rápido y frena (cúbica). */
+export const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(1 - t, 3));
+/** Como ease pero se pasa un poco y vuelve (efecto "pop"). */
+export const easeBack = (t) => {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  const c = 1.5, u = t - 1;
+  return 1 + (c + 1) * u * u * u + c * u * u;
+};
+/** Progreso 0..1 de t dentro del tramo [a, b]. */
+export const span = (t, a, b) => clamp((t - a) / (b - a));

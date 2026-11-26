@@ -190,5 +190,13 @@ export function buildTree({ foliage = 120000, lights = 5000, seed = 11 } = {}) {
     }
   });
 
-  return { tiers, points: P, baubles };
+  // Radio exterior medio a la altura f, suavizado (para el anillo de crecimiento y las luces guía).
+  const envAt = (f) => {
+    f = clamp(f, 0, 0.999);
+    const t = tiers[tierOf(f)];
+    return t.width * taper(t, (f - t.base) / t.height);
+  };
+  const envelope = (f) => (envAt(f - 0.03) + envAt(f - 0.015) + envAt(f) + envAt(f + 0.015)) / 4;
+
+  return { tiers, points: P, baubles, envelope };
 }
