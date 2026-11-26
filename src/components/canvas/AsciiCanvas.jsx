@@ -24,7 +24,7 @@ export default function AsciiCanvas({ className = '' }) {
 
     const layout = () => {
       const { width, height } = wrap.getBoundingClientRect();
-      const fontSize = width < 600 ? 10 : 14;
+      const fontSize = width < 500 ? 8 : 10;
       if (!renderer || renderer.fontSize !== fontSize) renderer = new CanvasRenderer(canvas, { fontSize });
       const grid = renderer.resize(width, height);
       aspect = grid.aspect;
@@ -38,7 +38,7 @@ export default function AsciiCanvas({ className = '' }) {
     const stop = startLoop((dt, t) => {
       buffer.clear();
       scene.render(buffer, camera, dt, t);
-      buffer.bloom(3, 0.9, aspect);
+      buffer.bloom(2, 0.8, aspect);
       renderer.draw(buffer);
     });
 

@@ -21,7 +21,7 @@ export class Camera {
   }
 
   /** Ajusta la escala para que `worldHeight` unidades ocupen `fill` del alto de la pantalla. */
-  fit(cols, rows, aspect, { worldHeight = 2.9, fill = 0.85, centerY = -0.15 } = {}) {
+  fit(cols, rows, aspect, { worldHeight = 3.3, fill = 0.85, centerY = -0.2 } = {}) {
     this.cols = cols;
     this.rows = rows;
     this.aspect = aspect;

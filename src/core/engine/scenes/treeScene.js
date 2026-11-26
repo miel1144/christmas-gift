@@ -1,44 +1,92 @@
-import { rotateY } from '../../geometry/camera';
-import { buildFoliage, buildLights, buildTrunk, buildDisk, TREE } from '../../geometry/tree';
+import {
+  buildFoliage,
+  buildGarlands,
+  buildOrnaments,
+  buildTrunk,
+  buildGround,
+  TREE,
+} from '../../geometry/tree';
 import { createSnow } from '../../physics/snow';
 
-// Rampas de carácter y color por intensidad (0 = sombra, último = luz).
-const FOLIAGE_CHARS = ['.', ',', ':', ';', '+', '*', '#', '%'];
-const FOLIAGE_COLORS = FOLIAGE_CHARS.map((_, i) => `hsl(150, 60%, ${14 + i * 6}%)`);
-const TRUNK_COLORS = ['hsl(25, 45%, 22%)', 'hsl(25, 45%, 32%)', 'hsl(25, 45%, 42%)'];
-const SNOW_COLORS = ['rgba(248,250,255,0.35)', 'rgba(248,250,255,0.6)', 'rgba(248,250,255,0.95)'];
-const STAR_COLOR = 'hsl(44, 90%, 72%)';
-const STAR_CORE = '#fff8e0';
+// --- Paletas -----------------------------------------------------------------
+// Glifos pesados: el árbol debe verse macizo. La luz la da sobre todo el color.
+const FOLIAGE_CHARS = ['+', '*', '#', '#', '%', '&', '8', 'B', '@', '@'];
+const GREEN_HUES = [136, 148, 160];
+const GREEN_LEVELS = 14;
+const FOLIAGE_COLORS = GREEN_HUES.map((hue, k) =>
+  Array.from({ length: GREEN_LEVELS }, (_, i) => {
+    const t = i / (GREEN_LEVELS - 1);
+    return `hsl(${hue}, ${38 + k * 6}%, ${12 + t * 46}%)`;
+  })
+);
+const FROST = '#dfe8f2';
+const TRUNK_COLORS = ['hsl(24, 40%, 16%)', 'hsl(24, 42%, 24%)', 'hsl(26, 45%, 33%)'];
+const GROUND_COLORS = [0.35, 0.55, 0.75, 0.95].map((a) => `hsla(44, 60%, 68%, ${a})`);
+const SNOW_COLORS = ['rgba(248,250,255,0.35)', 'rgba(248,250,255,0.65)', 'rgba(248,250,255,0.95)'];
+const STAR_CORE = '#fff6d8';
+const STAR_GOLD = 'hsl(44, 85%, 70%)';
+const STAR_RAY = 'hsl(44, 60%, 78%)';
 
-const ramp = (arr, v) => arr[Math.max(0, Math.min(arr.length - 1, Math.floor(v * arr.length)))];
+// Luz desde arriba a la izquierda y delante (la cámara mira hacia +Z).
+const L = (() => {
+  const v = [-0.62, 0.5, -0.6];
+  const n = Math.hypot(...v);
+  return v.map((c) => c / n);
+})();
+
+const clamp01 = (v) => (v < 0 ? 0 : v > 0.999 ? 0.999 : v);
+const pick = (arr, v) => arr[Math.floor(clamp01(v) * arr.length)];
 
 /**
- * Árbol que gira, con luces parpadeantes, estrella, disco de nieve y copos.
- * El giro tiene inercia: `nudge(dx)` lo empuja (arrastre con ratón o dedo).
+ * Árbol macizo que gira: follaje sombreado, guirnaldas y bolas que brillan,
+ * estrella con rayos, suelo dorado y nieve. `nudge(dx)` lo empuja (arrastre).
  */
 export function createTreeScene() {
   const foliage = buildFoliage();
-  const lights = buildLights();
+  for (const f of foliage) {
+    f.ca = Math.cos(f.a);
+    f.sa = Math.sin(f.a);
+  }
+  const garlands = buildGarlands();
+  const ornaments = buildOrnaments();
   const trunk = buildTrunk();
-  const disk = buildDisk();
+  const ground = buildGround();
   const snow = createSnow();
 
   let angle = 0;
   let spin = 0; // velocidad extra por arrastre, decae sola
-  const baseSpin = 0.35; // rad/s
+  const baseSpin = 0.3; // rad/s
 
-  function drawStar(buf, cam, t) {
-    const p = cam.project(0, TREE.baseY + TREE.height + 0.08, 0);
+  function drawStar(buf, cam, t, aspect) {
+    const p = cam.project(0, TREE.baseY + TREE.height + 0.07, 0);
     if (!p) return;
-    const z = p.invZ * 1.05;
-    const pulse = 0.75 + 0.25 * Math.sin(t * 3);
-    buf.plot(p.col, p.row, z, '*', STAR_CORE, 1);
-    // Rayos que alternan entre + y x.
-    const diag = Math.sin(t * 1.5) > 0;
-    const arms = diag
-      ? [[-1, -1, '\\'], [1, 1, '\\'], [1, -1, '/'], [-1, 1, '/']]
-      : [[-1, 0, '-'], [1, 0, '-'], [0, -1, '|'], [0, 1, '|'], [-2, 0, '-'], [2, 0, '-']];
-    for (const [dx, dy, ch] of arms) buf.plot(p.col + dx, p.row + dy, z, ch, STAR_COLOR, pulse * 0.7);
+    const z = p.invZ * 1.1;
+    const c = Math.round(p.col);
+    const r = Math.round(p.row);
+
+    // Núcleo.
+    const core = [
+      [-1, -1, '#'], [0, -1, '@'], [1, -1, '#'],
+      [-2, 0, '#'], [-1, 0, '@'], [0, 0, '@'], [1, 0, '@'], [2, 0, '#'],
+      [-1, 1, '#'], [0, 1, '@'], [1, 1, '#'],
+    ];
+    for (const [dx, dy, ch] of core) buf.plot(c + dx, r + dy, z, ch, dx === 0 && dy === 0 ? STAR_CORE : STAR_GOLD, 0.9);
+
+    // Rayos: 8 direcciones, los diagonales más cortos; su largo late.
+    const pulse = 0.75 + 0.25 * Math.sin(t * 2.2);
+    const dirs = [
+      [1, 0, '-', 9], [-1, 0, '-', 9], [0, 1, '|', 5], [0, -1, '|', 6],
+      [1, 1, '\\', 4], [-1, -1, '\\', 4], [1, -1, '/', 4], [-1, 1, '/', 4],
+    ];
+    const sx = 1 / (2 * aspect); // las celdas son altas: estira en horizontal
+    for (const [dx, dy, ch, len] of dirs) {
+      const n = Math.round(len * pulse);
+      for (let k = 2; k <= n + 1; k++) {
+        const col = c + dx * k * (dy === 0 ? 1 : sx);
+        const row = r + dy * k * (dx === 0 ? 1 : 0.5);
+        buf.plot(col, row, z, k <= 3 ? ch : '.', STAR_RAY, k <= 3 ? 0.35 : 0);
+      }
+    }
   }
 
   return {
@@ -50,56 +98,75 @@ export function createTreeScene() {
       spin *= Math.exp(-dt * 2.5);
       angle += (baseSpin + spin) * dt;
       snow.update(dt, t);
+      const cs = Math.cos(angle);
+      const sn = Math.sin(angle);
+      const rot = (x, z) => [x * cs - z * sn, x * sn + z * cs];
 
-      // Disco de nieve.
-      for (const d of disk) {
-        const [x, z] = rotateY(d.x, d.z, angle * 0.3);
-        const p = cam.project(x, d.y, z);
+      // Suelo.
+      for (const g of ground) {
+        const [x, z] = rot(g.x, g.z);
+        const p = cam.project(x, g.y, z);
         if (!p) continue;
-        const near = 1 - (z + 1.2) / 2.4; // 1 delante, 0 detrás
-        buf.plot(p.col, p.row, p.invZ, d.ring > 0.85 ? '.' : near > 0.5 ? '_' : '.', ramp(SNOW_COLORS, 0.2 + near * 0.6));
+        const ch = g.patch > 0.6 ? '#' : '+';
+        buf.plot(p.col, p.row, p.invZ, ch, pick(GROUND_COLORS, 1 - g.r * 0.9));
       }
 
-      // Tronco.
+      // Tronco (casi todo queda tapado por las ramas bajas).
       for (const q of trunk) {
-        const [x, z] = rotateY(q.x, q.z, angle);
+        const [x, z] = rot(q.x, q.z);
         const p = cam.project(x, q.y, z);
         if (!p) continue;
-        const facing = -Math.sin(q.a + angle);
-        buf.plot(p.col, p.row, p.invZ, '|', ramp(TRUNK_COLORS, 0.5 + facing * 0.5));
+        const lit = 0.5 - 0.5 * Math.sin(q.a + angle);
+        buf.plot(p.col, p.row, p.invZ, lit > 0.5 ? 'H' : '#', pick(TRUNK_COLORS, lit));
       }
 
       // Follaje.
       for (const f of foliage) {
-        const [x, z] = rotateY(f.x, f.z, angle);
+        const [x, z] = rot(f.x, f.z);
         const p = cam.project(x, f.y, z);
         if (!p) continue;
-        const facing = -Math.sin(f.a + angle); // 1 = mira a la cámara
-        if (facing < -0.35) continue; // la cara de atrás solo ensuciaría los huecos
-        const side = Math.cos(f.a + angle + 0.9); // luz lateral suave
-        const light = Math.max(0, Math.min(0.999, 0.28 + 0.5 * facing + 0.15 * side + 0.12 * f.h));
-        buf.plot(p.col, p.row, p.invZ, ramp(FOLIAGE_CHARS, light), ramp(FOLIAGE_COLORS, light));
+        // Normal de la rama girada: hacia fuera y un poco hacia arriba.
+        const nx = f.ca * cs - f.sa * sn;
+        const nz = f.ca * sn + f.sa * cs;
+        const lambert = Math.max(0, (nx * L[0] + 0.45 * L[1] + nz * L[2]) / 1.1);
+        const occlusion = 0.3 + 0.7 * f.depth * f.depth; // el interior queda en sombra
+        const light = (0.25 + 0.75 * lambert) * occlusion;
+
+        if (f.jitter > 0.982 && lambert > 0.55 && f.depth > 0.85) {
+          buf.plot(p.col, p.row, p.invZ, '*', FROST);
+          continue;
+        }
+        const ch = pick(FOLIAGE_CHARS, light + (f.jitter - 0.5) * 0.35);
+        const palette = FOLIAGE_COLORS[Math.floor(f.hue * GREEN_HUES.length)];
+        buf.plot(p.col, p.row, p.invZ, ch, pick(palette, light + (f.hue - 0.5) * 0.08));
       }
 
-      // Luces (encima del follaje: un poco de margen en la profundidad).
-      for (const l of lights) {
-        const [x, z] = rotateY(l.x, l.z, angle);
-        const p = cam.project(x, l.y, z);
+      // Guirnaldas (un poco por delante de las ramas en las que se apoyan).
+      for (const b of garlands) {
+        const [x, z] = rot(b.x, b.z);
+        const p = cam.project(x, b.y, z);
         if (!p) continue;
-        const front = z < 0.15;
-        const tw = 0.55 + 0.45 * Math.sin(t * l.speed + l.phase);
-        const emit = front ? tw : tw * 0.25;
-        buf.plot(p.col, p.row, p.invZ * 1.02, tw > 0.7 ? 'o' : '°', l.color, emit);
+        const tw = 0.6 + 0.4 * Math.sin(t * b.speed + b.phase);
+        buf.plot(p.col, p.row, p.invZ * 1.03, tw > 0.75 ? '@' : 'o', b.color, 0.35 * tw);
       }
 
-      drawStar(buf, cam, t);
+      // Bolas.
+      for (const o of ornaments) {
+        const [x, z] = rot(o.x, o.z);
+        const p = cam.project(x, o.y, z);
+        if (!p) continue;
+        const tw = 0.7 + 0.3 * Math.sin(t * 2 + o.phase);
+        buf.plot(p.col, p.row, p.invZ * 1.04, 'O', o.color, 0.6 * tw);
+      }
+
+      drawStar(buf, cam, t, cam.aspect);
 
       // Nieve.
       for (const f of snow.flakes) {
         const p = cam.project(f.x, f.y, f.z);
         if (!p) continue;
         const near = 1 - (f.z + 2.2) / 5.2;
-        buf.plot(p.col, p.row, p.invZ, near > 0.75 ? '*' : near > 0.4 ? '+' : '.', ramp(SNOW_COLORS, near));
+        buf.plot(p.col, p.row, p.invZ, near > 0.8 ? '*' : near > 0.45 ? '+' : '.', pick(SNOW_COLORS, near));
       }
     },
   };

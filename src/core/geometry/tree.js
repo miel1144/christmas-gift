@@ -1,85 +1,146 @@
 /**
- * Geometría del árbol: puntos sobre la superficie de varios conos apilados,
- * una guirnalda en espiral de luces, la estrella y el disco de nieve de la base.
- * Todo se genera una vez; la escena solo lo rota y lo proyecta.
+ * Geometría del árbol, generada una vez (con semilla fija: siempre el mismo árbol).
+ *
+ * - Follaje: miles de puntos que RELLENAN el volumen de un abeto con pisos de
+ *   ramas irregulares. El Z-buffer deja ver solo la capa delantera, así que la
+ *   silueta queda maciza y los puntos interiores dan sombra entre las ramas.
+ * - Guirnaldas: bandas de cuentas de colores que cuelgan en festón.
+ * - Tronco corto (casi oculto bajo las ramas bajas) y suelo con manchas.
  */
-const GOLDEN = Math.PI * (3 - Math.sqrt(5));
-
 export const TREE = {
-  height: 2.0, // de y=-1 (base del follaje) a y=1 (punta)
-  radius: 0.85,
+  height: 2.0, // follaje de y=-1 a y=1
+  radius: 1.2,
   baseY: -1,
-  trunkHeight: 0.22,
+  tiers: 7,
+  trunkHeight: 0.16,
 };
 
-/** Radio del follaje a la altura relativa h (0 abajo, 1 punta), con "pisos". */
-export function radiusAt(h) {
-  const tiers = 4;
-  const local = (h * tiers) % 1; // dentro de cada piso
-  const taper = 1 - h; // estrechamiento general
-  return TREE.radius * taper * (0.72 + 0.28 * (1 - local));
+/** PRNG con semilla (mulberry32). */
+export function seeded(seed = 1) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-export function buildFoliage(count = 2600) {
+/**
+ * Radio exterior del follaje a la altura h (0 base, 1 punta) y ángulo a.
+ * Cada piso es ancho abajo (puntas de rama que caen) y se estrecha arriba;
+ * el ruido angular hace que algunas ramas sobresalgan más que otras.
+ */
+export function outerRadius(h, a) {
+  const { tiers, radius } = TREE;
+  const t = Math.min(tiers - 1, Math.floor(h * tiers));
+  const u = h * tiers - t; // 0 abajo del piso, 1 arriba
+  const taper = Math.pow(1 - h, 0.92);
+  const tier = 0.62 + 0.38 * Math.pow(1 - u, 1.6);
+  const branches =
+    1 +
+    0.1 * Math.sin(a * 5 + t * 1.7) +
+    0.07 * Math.sin(a * 11 + t * 3.1) +
+    0.05 * Math.sin(a * 23 + t * 0.6);
+  return radius * taper * tier * branches;
+}
+
+export function buildFoliage(count = 16000, rand = seeded(7)) {
   const pts = [];
   for (let i = 0; i < count; i++) {
-    const h = Math.pow(i / count, 0.85);
-    const a = i * GOLDEN;
-    const r = radiusAt(h) * (0.92 + Math.random() * 0.08);
+    // Más puntos abajo, donde el árbol es más ancho.
+    const h = Math.min(0.995, 1 - Math.sqrt(rand()));
+    const a = rand() * Math.PI * 2;
+    // Profundidad dentro de la rama: 1 = punta exterior, 0.55 = cerca del eje.
+    const depth = 0.55 + 0.45 * Math.sqrt(rand());
+    const r = outerRadius(h, a) * depth;
     pts.push({
       x: Math.cos(a) * r,
-      y: TREE.baseY + h * TREE.height,
+      y: TREE.baseY + h * TREE.height - (1 - depth) * 0.06, // las ramas caen un poco
       z: Math.sin(a) * r,
-      a, // ángulo, para la normal
+      a,
       h,
+      depth,
+      jitter: rand(), // textura: variación estable de carácter y tono
+      hue: rand(),
     });
   }
   return pts;
 }
 
-export const LIGHT_COLORS = ['#ff5a6e', '#ffd36b', '#6bc8ff', '#fff4d6', '#ff9f4a', '#c48bff'];
+export const GARLAND_COLORS = ['#b76bff', '#5aa8ff', '#ffb347', '#ff6fb5', '#4fe0d0', '#ffd95a'];
 
-/** Luces a lo largo de una espiral que sube por el árbol. */
-export function buildLights(count = 70, turns = 5.5) {
-  const lights = [];
+/** Guirnaldas: cada una da una vuelta y pico colgando en festón. */
+export function buildGarlands(rand = seeded(11)) {
+  const beads = [];
+  const bands = [0.12, 0.3, 0.48, 0.66, 0.82];
+  bands.forEach((h0, k) => {
+    const color = GARLAND_COLORS[k % GARLAND_COLORS.length];
+    const a0 = rand() * Math.PI * 2;
+    const n = Math.round(150 * (1 - h0) + 30);
+    for (let i = 0; i < n; i++) {
+      const s = i / n;
+      const a = a0 + s * Math.PI * 2.2;
+      const sag = 0.035 * Math.abs(Math.sin(a * 3.5)); // festones
+      const h = h0 + s * 0.05 - sag;
+      const r = outerRadius(Math.max(0, h), a) * 1.02;
+      beads.push({
+        x: Math.cos(a) * r,
+        y: TREE.baseY + h * TREE.height,
+        z: Math.sin(a) * r,
+        color,
+        phase: rand() * Math.PI * 2,
+        speed: 0.8 + rand() * 1.6,
+      });
+    }
+  });
+  return beads;
+}
+
+export const ORNAMENT_COLORS = ['#ff4d5e', '#ffd36b', '#e8f0ff', '#ff9f4a', '#c48bff', '#6bc8ff'];
+
+/** Bolas sueltas en las puntas de las ramas. */
+export function buildOrnaments(count = 55, rand = seeded(23)) {
+  const out = [];
   for (let i = 0; i < count; i++) {
-    const h = 0.04 + (i / count) * 0.88;
-    const a = h * turns * Math.PI * 2;
-    const r = radiusAt(h) + 0.04;
-    lights.push({
+    const h = 0.05 + rand() * 0.85;
+    const a = rand() * Math.PI * 2;
+    const r = outerRadius(h, a) * 1.0;
+    out.push({
       x: Math.cos(a) * r,
-      y: TREE.baseY + h * TREE.height,
+      y: TREE.baseY + h * TREE.height - 0.02,
       z: Math.sin(a) * r,
-      color: LIGHT_COLORS[i % LIGHT_COLORS.length],
-      phase: Math.random() * Math.PI * 2,
-      speed: 1.5 + Math.random() * 2.5,
+      color: ORNAMENT_COLORS[i % ORNAMENT_COLORS.length],
+      phase: rand() * Math.PI * 2,
     });
   }
-  return lights;
+  return out;
 }
 
-export function buildTrunk() {
+export function buildTrunk(rand = seeded(5)) {
   const pts = [];
-  const r = 0.12;
-  for (let i = 0; i < 160; i++) {
-    const a = i * GOLDEN;
-    const t = (i % 16) / 16;
-    pts.push({ x: Math.cos(a) * r, y: TREE.baseY - t * TREE.trunkHeight, z: Math.sin(a) * r, a });
+  for (let i = 0; i < 500; i++) {
+    const a = rand() * Math.PI * 2;
+    const r = 0.11 * (0.8 + 0.2 * rand());
+    pts.push({ x: Math.cos(a) * r, y: TREE.baseY - rand() * TREE.trunkHeight, z: Math.sin(a) * r, a });
   }
   return pts;
 }
 
-/** Disco de nieve en el suelo (anillos concéntricos). */
-export function buildDisk(radius = 1.2, rings = 6) {
+/** Suelo: elipse de nieve iluminada con manchas, más densa cerca del árbol. */
+export function buildGround(radius = 2.3, rand = seeded(31)) {
   const pts = [];
   const y = TREE.baseY - TREE.trunkHeight;
-  for (let k = 1; k <= rings; k++) {
-    const r = (k / rings) * radius;
-    const n = Math.round(12 + k * 14);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + k * 0.37;
-      pts.push({ x: Math.cos(a) * r, y, z: Math.sin(a) * r, ring: k / rings });
-    }
+  for (let i = 0; i < 3200; i++) {
+    const r = radius * (0.25 + 0.75 * Math.sqrt(rand()));
+    const a = rand() * Math.PI * 2;
+    const x = Math.cos(a) * r;
+    const z = Math.sin(a) * r;
+    // Manchas: ruido barato con senos; fuera de ellas no hay punto.
+    const patch = Math.sin(x * 3.1 + 1.3) * Math.sin(z * 4.3 + 0.7) + 0.5 * Math.sin((x + z) * 7.7);
+    if (patch < -0.15) continue;
+    pts.push({ x, y, z, r: r / radius, patch });
   }
   return pts;
 }
