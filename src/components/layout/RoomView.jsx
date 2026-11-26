@@ -39,6 +39,24 @@ export default function RoomView({ roomId }) {
   };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
+  // Esc cierra el panel abierto (miembros o regalos). Si hay un diálogo encima, lo
+  // cierra él primero; si se está escribiendo, el primer Esc solo sale del campo
+  // (así no se pierde una carta a medias).
+  useEffect(() => {
+    if (!panel) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || document.querySelector('.modal-backdrop')) return;
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && el.matches('input, textarea, select')) {
+        el.blur();
+        return;
+      }
+      setPanel(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [panel]);
+
   const onGiftClick = (id) => {
     const g = gifts.find((x) => x.id === id);
     if (!g) return;

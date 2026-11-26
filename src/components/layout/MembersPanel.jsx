@@ -105,7 +105,7 @@ export default function MembersPanel({ room, members, online, me, onRoomChange, 
     <aside className="drawer" aria-label="Miembros de la sala">
       <div className="drawer-head">
         <h2 className="panel-title">[ miembros ]</h2>
-        <button className="link" onClick={onClose} aria-label="Cerrar">cerrar</button>
+        <button className="link" onClick={onClose} aria-label="Cerrar" title="Cerrar (Esc)">cerrar</button>
       </div>
 
       <ul className="list">

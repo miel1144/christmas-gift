@@ -37,15 +37,19 @@ export async function listPublicRooms() {
   return data;
 }
 
-/** El trigger on_workspace_created me añade como admin. */
+/**
+ * El trigger on_workspace_created me añade como admin.
+ *
+ * El id se genera aquí y NO se pide la fila de vuelta (.select()): para devolverla,
+ * Postgres aplica la política de lectura, que exige ser miembro o que la sala sea
+ * pública. En una sala privada el trigger aún no me ha hecho miembro en ese
+ * instante, así que pedirla de vuelta hacía fallar toda la creación.
+ */
 export async function createRoom({ name, isPublic, ownerId }) {
-  const { data, error } = await supabase
-    .from('workspaces')
-    .insert({ name, is_public: isPublic, owner_id: ownerId })
-    .select('id')
-    .single();
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from('workspaces').insert({ id, name, is_public: isPublic, owner_id: ownerId });
   if (error) throw error;
-  return data.id;
+  return id;
 }
 
 /** null si no existe o si es privada y no soy miembro (RLS la oculta). */

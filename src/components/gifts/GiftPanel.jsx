@@ -35,7 +35,7 @@ export default function GiftPanel({ room, gifts, members, me, nameOf, onRead, on
     <aside className="drawer" aria-label="Regalos">
       <div className="drawer-head">
         <h2 className="panel-title">[ regalos ]</h2>
-        <button className="link" onClick={onClose} aria-label="Cerrar">cerrar</button>
+        <button className="link" onClick={onClose} aria-label="Cerrar" title="Cerrar (Esc)">cerrar</button>
       </div>
 
       <div className="tabs" role="tablist">
