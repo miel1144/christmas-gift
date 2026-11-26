@@ -25,10 +25,12 @@ const DRAG_RG = [0.75, 1.5];
  *
  * API: layout(grid) · render(buf, dt, t) · trigger(paso) · restart() ·
  *      setGifts(specs) · pick(col, row) → id de regalo · nudge(dx) ·
- *      beginDrag(id, col, row) · dragTo(col, row) · endDrag() → { id, a, rg } · cancelDrag()
+ *      beginDrag(id, col, row) · dragTo(col, row) · endDrag() → { id, a, rg } · cancelDrag() ·
+ *      hold(on)
  *
- * Mientras se arrastra un regalo el árbol deja de girar, para que el suelo no se
- * mueva bajo el puntero.
+ * hold(true): el puntero está sobre un regalo; el árbol frena hasta pararse para
+ * que sea fácil agarrarlo. Mientras se arrastra un regalo el árbol no gira nada,
+ * para que el suelo no se mueva bajo el puntero.
  *
  * Profundidades (mayor = delante): nieve −900 · suelo −500 · tronco −5 ·
  * árbol ±rMax · bolas +7 · estrella 70.
@@ -48,6 +50,8 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
   let angle = 0;
   let spin = 0; // giro extra por arrastre, decae solo
   let drag = null; // { id, g, a, rg, a0, rg0, dx, dy }: regalo que se está moviendo
+  let held = false; // puntero sobre un regalo
+  let pace = 1; // 1 = giro normal, 0 = parado (se acerca suave a su objetivo)
 
   // Centro de la base de un regalo en la rejilla (inverso de toFloor).
   const floorCell = (a, rg) => {
@@ -130,6 +134,10 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
       return { id, a, rg };
     },
 
+    hold(on) {
+      held = Boolean(on);
+    },
+
     cancelDrag() {
       if (!drag) return;
       Object.assign(drag, { a: drag.a0, rg: drag.rg0 });
@@ -165,7 +173,8 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
       lastT = t;
       intro.update(t);
       spin *= Math.exp(-dt * 2.5);
-      if (!drag) angle += (0.5 + spin) * dt;
+      pace += ((held || drag ? 0 : 1) - pace) * Math.min(1, dt * 8);
+      if (!drag) angle += (0.5 * pace + spin) * dt;
 
       const s1 = intro.local(0), s2 = intro.local(1), s3 = intro.local(2);
       const F = growth(s2);

@@ -96,6 +96,20 @@ export default function RoomView({ roomId }) {
     [placeGiftLocally, refetchGifts]
   );
 
+  const onGiftLocked = useCallback(
+    (id) => {
+      const g = gifts.find((x) => x.id === id);
+      if (!g) return;
+      showToast(
+        g.receiver_id === me.id
+          ? `Este regalo te lo dejó ${nameOf(g.sender_id)}: solo quien lo envía puede moverlo.`
+          : `Este regalo es de ${nameOf(g.sender_id)}: solo quien lo envía puede moverlo.`
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [gifts, me.id, nameOf]
+  );
+
   if (status === 'loading') {
     return (
       <main className="stage">
@@ -120,7 +134,7 @@ export default function RoomView({ roomId }) {
 
   return (
     <main className="scene">
-      <AsciiCanvas gifts={specs} onGiftClick={onGiftClick} canDragGift={canDragGift} onGiftMove={onGiftMove} />
+      <AsciiCanvas gifts={specs} onGiftClick={onGiftClick} canDragGift={canDragGift} onGiftMove={onGiftMove} onGiftLocked={onGiftLocked} />
       <TopBar
         left={
           <>

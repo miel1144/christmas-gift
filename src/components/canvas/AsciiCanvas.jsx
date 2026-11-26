@@ -11,8 +11,10 @@ import { createTreeScene } from '../../core/engine/scenes/tree';
  *   (pasa a modo manual) y R la repite.
  * - Arrastrar con ratón o dedo hace girar el árbol; un clic sobre un regalo
  *   llama a `onGiftClick(id)`.
+ * - Con el puntero sobre un regalo el árbol frena, para poder agarrarlo.
  * - Si `canDragGift(id)` dice que sí, arrastrar ese regalo lo mueve por el suelo
  *   (el árbol se para mientras tanto) y al soltarlo llama a `onGiftMove(id, ángulo, radio)`.
+ *   Arrastrar un regalo que no se puede mover no gira el árbol: llama a `onGiftLocked(id)`.
  *
  * `gifts`: especificaciones de cajas (ver core/geometry/gifts.js).
  * `sceneFactory`: otra escena (p. ej. solo nieve). `interactive={false}`: fondo decorativo,
@@ -27,6 +29,7 @@ export default function AsciiCanvas({
   onGiftClick,
   canDragGift,
   onGiftMove,
+  onGiftLocked,
   sceneFactory = createTreeScene,
   interactive = true,
   anchorRef,
@@ -37,7 +40,7 @@ export default function AsciiCanvas({
   const sceneRef = useRef(null);
   // Los manejadores se leen en cada evento: así pueden cambiar sin rehacer la escena.
   const handlers = useRef({});
-  handlers.current = { onGiftClick, canDragGift, onGiftMove };
+  handlers.current = { onGiftClick, canDragGift, onGiftMove, onGiftLocked };
 
   useEffect(() => {
     sceneRef.current?.setGifts?.(gifts);
@@ -90,13 +93,19 @@ export default function AsciiCanvas({
     };
     const draggable = (id) => Boolean(id && handlers.current.canDragGift?.(id) && scene.beginDrag);
 
-    // Un gesto empieza en 'spin' (girar el árbol) o 'gift' (sobre un regalo mío).
-    // Hasta pasar CLICK_SLOP no se decide nada: si se suelta antes, es un clic.
-    let gesture = null; // { mode: 'spin' | 'gift', id, lastX, startX, startY, startCell, moving }
+    // Un gesto empieza en 'spin' (fondo: girar el árbol), 'gift' (un regalo que puedo
+    // mover) o 'locked' (un regalo que no). Hasta pasar CLICK_SLOP no se decide nada:
+    // si se suelta antes, es un clic.
+    let gesture = null; // { mode, id, lastX, startX, startY, startCell, moving }
+    const hover = (id) => {
+      scene.hold?.(Boolean(id));
+      canvas.style.cursor = draggable(id) ? 'grab' : id && handlers.current.onGiftClick ? 'pointer' : '';
+    };
     const down = (e) => {
       const id = giftAt(e);
+      scene.hold?.(Boolean(id));
       gesture = {
-        mode: draggable(id) ? 'gift' : 'spin',
+        mode: !id ? 'spin' : draggable(id) ? 'gift' : 'locked',
         id,
         lastX: e.clientX,
         startX: e.clientX,
@@ -108,19 +117,19 @@ export default function AsciiCanvas({
     };
     const move = (e) => {
       if (!gesture) {
-        const id = giftAt(e);
-        canvas.style.cursor = draggable(id) ? 'grab' : id && handlers.current.onGiftClick ? 'pointer' : '';
+        hover(giftAt(e));
         return;
       }
       if (!gesture.moving && Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) >= CLICK_SLOP) {
         gesture.moving = true;
         if (gesture.mode === 'gift') {
           const { col, row } = gesture.startCell;
-          if (!scene.beginDrag(gesture.id, col, row)) gesture.mode = 'spin';
+          if (!scene.beginDrag(gesture.id, col, row)) gesture.mode = 'locked';
           else canvas.style.cursor = 'grabbing';
         }
+        if (gesture.mode === 'locked') handlers.current.onGiftLocked?.(gesture.id);
       }
-      if (!gesture.moving) return;
+      if (!gesture.moving || gesture.mode === 'locked') return;
       if (gesture.mode === 'gift') {
         const { col, row } = cellOf(e);
         scene.dragTo(col, row);
@@ -133,8 +142,8 @@ export default function AsciiCanvas({
       const g = gesture;
       gesture = null;
       if (!g) return;
+      hover(giftAt(e));
       if (g.moving && g.mode === 'gift') {
-        canvas.style.cursor = 'grab';
         const r = scene.endDrag();
         if (r) handlers.current.onGiftMove?.(r.id, r.a, r.rg);
         return;
@@ -147,12 +156,16 @@ export default function AsciiCanvas({
     const cancel = () => {
       if (gesture?.moving && gesture.mode === 'gift') scene.cancelDrag?.();
       gesture = null;
-      canvas.style.cursor = '';
+      hover(null);
+    };
+    const leave = () => {
+      if (!gesture) hover(null);
     };
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);
     canvas.addEventListener('pointerup', up);
     canvas.addEventListener('pointercancel', cancel);
+    canvas.addEventListener('pointerleave', leave);
 
     // Teclado: 1–3 pasos de la intro, R repetir. No interfiere si se escribe en un campo.
     const key = (e) => {
@@ -170,6 +183,7 @@ export default function AsciiCanvas({
       canvas.removeEventListener('pointermove', move);
       canvas.removeEventListener('pointerup', up);
       canvas.removeEventListener('pointercancel', cancel);
+      canvas.removeEventListener('pointerleave', leave);
       sceneRef.current = null;
     };
     // La escena se crea una vez; los cambios de `gifts` llegan por setGifts.
