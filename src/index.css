@@ -382,3 +382,19 @@ body {
 .settings-rename { align-items: flex-end; flex-wrap: nowrap; }
 .grow { flex: 1; }
 .settings-rename .btn { flex-shrink: 0; }
+
+/* --- Panel de superadmin --- */
+.admin-panel { max-width: 960px !important; width: 100%; }
+.table-wrap { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.admin-table th { text-align: left; font-size: 0.7rem; color: var(--muted); font-weight: normal; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+.admin-table td { padding: 0.45rem 0.5rem; border-bottom: 1px dashed rgba(248, 250, 255, 0.12); vertical-align: middle; }
+.admin-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.admin-table .nowrap { white-space: nowrap; }
+.danger-link { color: var(--fail); }
+.badge-link { border: none; cursor: pointer; font: inherit; font-size: 0.7rem; }
+.badge-link:hover { filter: brightness(1.1); }
+.badge-link:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; }
+
+/* --- No encontrada --- */
+.not-found-art { color: var(--star); font-size: 0.8rem; }

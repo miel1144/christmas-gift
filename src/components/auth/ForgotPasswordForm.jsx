@@ -5,8 +5,8 @@ import { authErrorMessage, requestPasswordReset } from '../../services/supabase/
  * Pide el email de recuperación. El mensaje de éxito es siempre el mismo, exista o
  * no la cuenta, para no revelar qué emails están registrados.
  */
-export default function ForgotPasswordForm({ formRef, intro, initialEmail = '', onBack }) {
-  const [email, setEmail] = useState(initialEmail);
+export default function ForgotPasswordForm({ formRef, intro, onBack }) {
+  const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [sent, setSent] = useState(false);

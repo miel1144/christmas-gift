@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { authErrorMessage, updateProfile } from '../../services/supabase/auth';
 import { AVATAR_COLS, AVATAR_PRESETS, AVATAR_ROWS, normalizeAvatar } from '../../utils/avatar';
+import { USERNAME_HINT, USERNAME_MAX, usernameProblem } from '../../utils/username';
 
-const NAME_MAX = 40;
 
-/** Perfil: nombre visible y avatar ASCII (uno predefinido o dibujado a mano). */
+/** Perfil: nombre de usuario (visible en las salas y para entrar) y avatar ASCII. */
 export default function ProfileModal({ onClose }) {
   const profile = useAuthStore((s) => s.profile);
   const setProfile = useAuthStore((s) => s.setProfile);
@@ -33,7 +33,8 @@ export default function ProfileModal({ onClose }) {
 
   const trimmed = name.trim();
   const art = normalizeAvatar(avatar);
-  const nameOk = trimmed.length >= 1 && trimmed.length <= NAME_MAX;
+  const nameProblem = usernameProblem(name);
+  const nameOk = !nameProblem;
   const dirty = trimmed !== (profile.display_name ?? '') || art !== (profile.avatar_ascii ?? null);
 
   async function onSubmit(e) {
@@ -63,16 +64,21 @@ export default function ProfileModal({ onClose }) {
         </div>
 
         <label className="field">
-          <span>nombre <span className="muted">({trimmed.length}/{NAME_MAX})</span></span>
+          <span>nombre de usuario <span className="muted">({trimmed.length}/{USERNAME_MAX})</span></span>
           <input
             value={name}
             onChange={(e) => { setName(e.target.value); setSaved(false); }}
-            maxLength={NAME_MAX}
+            maxLength={USERNAME_MAX}
             required
             autoFocus
-            autoComplete="nickname"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            aria-invalid={nameOk ? undefined : true}
           />
-          {!nameOk && <span className="msg fail small">El nombre no puede quedar vacío.</span>}
+          <span className={`small ${nameOk ? 'muted' : 'msg fail'}`}>
+            {nameProblem ?? `Es también tu usuario para entrar: si lo cambias, entra con el nuevo. ${USERNAME_HINT}`}
+          </span>
         </label>
 
         <fieldset className="field">

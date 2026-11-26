@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { signIn, signUp, authErrorMessage, linkError } from '../../services/supabase/auth';
+import { useEffect, useRef, useState } from 'react';
+import { signIn, signUp, authErrorMessage, linkError, usernameAvailable } from '../../services/supabase/auth';
+import { USERNAME_HINT, USERNAME_MAX, usernameProblem } from '../../utils/username';
 import ForgotPasswordForm from './ForgotPasswordForm';
 import PasswordInput from '../ui/PasswordInput';
 import AsciiCanvas from '../canvas/AsciiCanvas';
@@ -15,15 +16,36 @@ const TREE = `        *
 
 export default function AuthScreen() {
   const [mode, setMode] = useState('signIn'); // 'signIn' | 'signUp' | 'forgot'
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  // Registro: comprobación en vivo del nombre ('idle' | 'checking' | 'free' | 'taken').
+  const [nameState, setNameState] = useState('idle');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(() => linkError());
   const [notice, setNotice] = useState(null);
 
   const isSignUp = mode === 'signUp';
   const formRef = useRef(null);
+  const nameProblem = isSignUp && username ? usernameProblem(username) : null;
+
+  useEffect(() => {
+    if (!isSignUp || !username.trim() || usernameProblem(username)) {
+      setNameState('idle');
+      return undefined;
+    }
+    setNameState('checking');
+    let alive = true;
+    const timer = setTimeout(() => {
+      usernameAvailable(username)
+        .then((free) => alive && setNameState(free ? 'free' : 'taken'))
+        .catch(() => alive && setNameState('idle'));
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [isSignUp, username]);
 
   function switchMode() {
     setMode(isSignUp ? 'signIn' : 'signUp');
@@ -41,16 +63,16 @@ export default function AuthScreen() {
         const { needsConfirmation } = await signUp({
           email: email.trim(),
           password,
-          displayName: displayName.trim(),
+          displayName: username.trim(),
         });
         if (needsConfirmation) {
-          setNotice(`Te enviamos un enlace a ${email.trim()}. Ábrelo para activar la cuenta.`);
+          setNotice(`Te enviamos un enlace a ${email.trim()}. Ábrelo para activar la cuenta y luego entra con tu usuario «${username.trim()}».`);
           setMode('signIn');
           setPassword('');
         }
         // Si no hace falta confirmar, onAuthStateChange cambia de pantalla solo.
       } else {
-        await signIn({ email: email.trim(), password });
+        await signIn({ username, password });
       }
     } catch (err) {
       setError(authErrorMessage(err));
@@ -67,7 +89,6 @@ export default function AuthScreen() {
       {mode === 'forgot' ? (
         <ForgotPasswordForm
           formRef={formRef}
-          initialEmail={email}
           intro="Escribe el email de tu cuenta y te mandamos un enlace para poner una contraseña nueva."
           onBack={() => {
             setMode('signIn');
@@ -79,30 +100,41 @@ export default function AuthScreen() {
         <form className="panel" onSubmit={onSubmit} ref={formRef}>
           <h1 className="panel-title">{isSignUp ? '[ crear cuenta ]' : '[ entrar ]'}</h1>
 
+          <label className="field">
+            <span>{isSignUp ? 'nombre de usuario' : 'usuario'}</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              maxLength={isSignUp ? USERNAME_MAX : 64}
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder={isSignUp ? 'así te verán en las salas' : undefined}
+              aria-describedby={isSignUp ? 'username-help' : undefined}
+              aria-invalid={isSignUp && (nameProblem || nameState === 'taken') ? true : undefined}
+            />
+            {isSignUp && (
+              <span id="username-help" className={`small ${nameProblem || nameState === 'taken' ? 'msg fail' : nameState === 'free' ? 'msg ok' : 'muted'}`} aria-live="polite">
+                {nameProblem ?? (nameState === 'checking' ? 'comprobando…' : nameState === 'taken' ? 'Ese nombre ya está en uso.' : nameState === 'free' ? 'Disponible.' : USERNAME_HINT)}
+              </span>
+            )}
+          </label>
+
           {isSignUp && (
             <label className="field">
-              <span>nombre</span>
+              <span>email</span>
               <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                maxLength={40}
-                autoComplete="nickname"
-                placeholder="cómo te verán en la sala"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
               />
+              <span className="muted small">Para confirmar la cuenta y recuperar la contraseña. Nadie más lo ve.</span>
             </label>
           )}
-
-          <label className="field">
-            <span>email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </label>
 
           <label className="field">
             <span>contraseña</span>
@@ -118,7 +150,7 @@ export default function AuthScreen() {
           {error && <p className="msg fail" role="alert">{error}</p>}
           {notice && <p className="msg ok" role="status">{notice}</p>}
 
-          <button className="btn" type="submit" disabled={busy}>
+          <button className="btn" type="submit" disabled={busy || (isSignUp && (Boolean(nameProblem) || nameState === 'taken'))}>
             {busy ? '...' : isSignUp ? '> registrarme' : '> entrar'}
           </button>
 

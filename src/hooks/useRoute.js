@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
  *   /room/<uuid>      sala
  *   /join/<código>    unirse con invitación
  *   /reset            poner contraseña nueva (enlace del email de recuperación)
+ *   /admin            panel de superadmin
+ *   cualquier otra    página "no encontrada"
  *
  * En producción el hosting debe servir index.html para cualquier ruta.
  */
@@ -23,7 +25,9 @@ export function matchRoute(path) {
   if ((m = path.match(/^\/room\/([0-9a-f-]{36})\/?$/i))) return { name: 'room', id: m[1] };
   if ((m = path.match(/^\/join\/([A-Za-z0-9]+)\/?$/))) return { name: 'join', code: m[1] };
   if (/^\/reset\/?$/.test(path)) return { name: 'reset' };
-  return { name: 'lobby' };
+  if (/^\/admin\/?$/.test(path)) return { name: 'admin' };
+  if (path === '/' || path === '') return { name: 'lobby' };
+  return { name: 'notFound' };
 }
 
 export function useRoute() {

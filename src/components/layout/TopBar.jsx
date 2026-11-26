@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { signOut } from '../../services/supabase/auth';
 import { useAuthStore } from '../../store/authStore';
 import ProfileModal from '../profile/ProfileModal';
+import { navigate } from '../../hooks/useRoute';
 
 /**
  * Barra superior: contenido propio a la izquierda; acciones, nombre y "salir" a la derecha.
@@ -21,7 +22,9 @@ export default function TopBar({ left, children }) {
           <button className="link who-name" onClick={() => setProfileOpen(true)} title="Editar tu perfil">
             {profile?.display_name ?? session?.user.email}
           </button>
-          {profile?.role === 'superadmin' && <span className="badge">superadmin</span>}
+          {profile?.role === 'superadmin' && (
+            <button className="badge badge-link" onClick={() => navigate('/admin')} title="Abrir el panel de superadmin">admin</button>
+          )}
         </span>
         <button className="link" onClick={() => signOut()}>salir</button>
       </div>
