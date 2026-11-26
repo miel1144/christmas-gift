@@ -1,100 +1,87 @@
-/**
- * Rejilla de caracteres con Z-buffer y capa de brillo (glow) para el bloom.
- *
- * Cada celda guarda: carácter, color, profundidad inversa (1/z, mayor = más cerca)
- * y cuánta luz emite. El bloom reparte esa luz a las celdas vecinas vacías y las
- * rellena con caracteres tenues, así el "resplandor" también es ASCII.
- */
-export const GLOW_RAMP = ['.', '·', ':', '*'];
+import { hash3 } from '../../utils/math';
 
+/**
+ * Rejilla de caracteres con Z-buffer.
+ *
+ * Cada celda guarda carácter, color y profundidad (mayor z = más cerca; gana el
+ * más cercano). Además acumula "fuentes de brillo": al final del fotograma
+ * `resolveGlows` rellena las celdas VACÍAS de alrededor con caracteres tenues
+ * (+ : .) que titilan, así el halo también es texto.
+ */
 export class AsciiBuffer {
-  constructor(cols = 1, rows = 1) {
-    this.resize(cols, rows);
+  constructor(cols = 1, rows = 1, aspect = 0.6) {
+    this.glows = [];
+    this.resize(cols, rows, aspect);
   }
 
-  resize(cols, rows) {
+  resize(cols, rows, aspect = this.aspect) {
     this.cols = Math.max(1, cols | 0);
     this.rows = Math.max(1, rows | 0);
+    this.aspect = aspect; // ancho/alto de una celda
     const n = this.cols * this.rows;
     this.chars = new Array(n);
     this.colors = new Array(n);
     this.depth = new Float32Array(n);
-    this.emit = new Float32Array(n);
-    this.glow = new Float32Array(n);
-    this.glowColor = new Array(n);
     this.clear();
   }
 
   clear() {
-    this.chars.fill(' ');
-    this.colors.fill(null);
-    this.depth.fill(0);
-    this.emit.fill(0);
-    this.glow.fill(0);
-    this.glowColor.fill(null);
+    this.chars.fill('');
+    this.colors.fill('');
+    this.depth.fill(-Infinity);
+    this.glows.length = 0;
   }
 
-  /**
-   * Pinta un carácter si está más cerca que lo que ya hay.
-   * @param {number} invZ  1/profundidad; 0 = infinitamente lejos (fondo)
-   * @param {number} emit  0..1, luz propia (luces, estrella)
-   */
-  plot(col, row, invZ, char, color, emit = 0) {
-    col = Math.round(col);
-    row = Math.round(row);
+  /** Pinta un carácter si está más cerca que lo que ya hay. */
+  plot(col, row, z, char, color) {
+    col = Math.floor(col);
+    row = Math.floor(row);
     if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return false;
     const i = row * this.cols + col;
-    if (invZ < this.depth[i]) return false;
-    this.depth[i] = invZ;
+    if (z < this.depth[i]) return false;
+    this.depth[i] = z;
     this.chars[i] = char;
     this.colors[i] = color;
-    this.emit[i] = emit;
     return true;
   }
 
-  /** Texto 2D sin profundidad (HUD, etiquetas): siempre encima. */
-  text(col, row, str, color) {
-    for (let k = 0; k < str.length; k++) this.plot(col + k, row, Infinity, str[k], color);
+  /** z de la celda (−Infinity si está vacía). */
+  depthAt(col, row) {
+    col = Math.floor(col);
+    row = Math.floor(row);
+    if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return Infinity;
+    return this.depth[row * this.cols + col];
   }
 
   /**
-   * Bloom con caracteres: cada celda emisora reparte luz en un radio.
-   * Las celdas vacías con suficiente luz reciben un carácter de GLOW_RAMP.
-   * Las celdas altas que las fuentes de texto tienen ~2:1 se compensan con `aspect`.
+   * Registra un halo. hue < 0 = blanco. `radius` en columnas (en filas se
+   * corrige con el aspecto de la celda).
    */
-  bloom(radius = 3, strength = 0.9, aspect = 0.5) {
-    const { cols, rows, emit, glow, glowColor, colors, chars } = this;
-    const ry = Math.max(1, Math.round(radius * aspect));
+  addGlow(col, row, hue, amount, radius) {
+    this.glows.push(col, row, hue, amount, radius);
+  }
 
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const e = emit[row * cols + col];
-        if (e <= 0) continue;
-        const color = colors[row * cols + col];
-        for (let dy = -ry; dy <= ry; dy++) {
-          const r = row + dy;
-          if (r < 0 || r >= rows) continue;
-          for (let dx = -radius; dx <= radius; dx++) {
-            const c = col + dx;
-            if (c < 0 || c >= cols || (dx === 0 && dy === 0)) continue;
-            const d = Math.hypot(dx, dy / aspect) / radius;
-            if (d >= 1) continue;
-            const g = e * strength * (1 - d) * (1 - d);
-            const j = r * cols + c;
-            if (g > glow[j]) {
-              glow[j] = g;
-              glowColor[j] = color;
-            }
-          }
+  resolveGlows(t) {
+    const { cols, rows, chars, colors, glows, aspect } = this;
+    const tick = Math.floor(t * 9); // el titileo cambia ~9 veces por segundo
+    for (let g = 0; g < glows.length; g += 5) {
+      const gx = glows[g], gy = glows[g + 1], hue = glows[g + 2], amt = Math.min(1, glows[g + 3]), rad = glows[g + 4];
+      if (amt < 0.1 || rad < 2) continue;
+      const ry = rad * aspect;
+      const x0 = Math.max(0, Math.floor(gx - rad)), x1 = Math.min(cols - 1, Math.ceil(gx + rad));
+      const y0 = Math.max(0, Math.floor(gy - ry)), y1 = Math.min(rows - 1, Math.ceil(gy + ry));
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const i = y * cols + x;
+          if (chars[i]) continue;
+          const d = Math.hypot((x + 0.5 - gx) / rad, (y + 0.5 - gy) / ry);
+          if (d >= 1) continue;
+          if (hash3(x, y, tick) > amt * Math.pow(1 - d, 1.6) * 0.75) continue;
+          chars[i] = d < 0.35 ? '+' : d < 0.65 ? ':' : '.';
+          const a = (0.5 + 0.5 * (1 - d)).toFixed(2);
+          colors[i] = hue < 0 ? `rgba(255,255,255,${a})` : `hsla(${hue},100%,${Math.round(78 + 14 * (1 - d))}%,${a})`;
         }
       }
-    }
-
-    for (let i = 0; i < chars.length; i++) {
-      if (chars[i] !== ' ' || glow[i] < 0.12) continue;
-      const k = Math.min(GLOW_RAMP.length - 1, Math.floor(glow[i] * GLOW_RAMP.length));
-      chars[i] = GLOW_RAMP[k];
-      colors[i] = glowColor[i];
     }
   }
 }

@@ -1,33 +1,26 @@
-/**
- * Copos de nieve en una caja 3D alrededor del árbol. Caen, se mecen con el
- * viento y reaparecen arriba al tocar el suelo.
- */
-// yBottom = altura del tapete: los copos desaparecen al llegar al suelo (no se acumulan).
-const BOX = { x: 3.2, yTop: 2.4, yBottom: -1.8, zNear: -2.2, zFar: 3 };
+import { seeded } from '../../utils/math';
 
-function spawn(flake, anywhere) {
-  flake.x = (Math.random() * 2 - 1) * BOX.x;
-  flake.y = anywhere ? BOX.yBottom + Math.random() * (BOX.yTop - BOX.yBottom) : BOX.yTop;
-  flake.z = BOX.zNear + Math.random() * (BOX.zFar - BOX.zNear);
-  flake.vy = 0.12 + Math.random() * 0.22;
-  flake.phase = Math.random() * Math.PI * 2;
-  flake.sway = 0.05 + Math.random() * 0.1;
-  return flake;
+/**
+ * Nieve de fondo: copos `+` que caen sin parar y desaparecen por abajo.
+ * Coordenadas normalizadas (0..1); la profundidad `d` decide el brillo.
+ * La posición sale del tiempo directamente: no hay estado que integrar.
+ */
+export function createSnow(count = 230, seed = 3) {
+  const rand = seeded(seed);
+  return Array.from({ length: count }, () => ({
+    x: rand(),
+    y: rand(),
+    v: 0.015 + rand() * 0.035, // pantallas por segundo
+    d: rand(),
+  }));
 }
 
-export function createSnow(count = 220) {
-  const flakes = Array.from({ length: count }, () => spawn({}, true));
-
-  return {
-    flakes,
-    update(dt, t, wind = 0) {
-      for (const f of flakes) {
-        f.y -= f.vy * dt;
-        f.x += (Math.sin(t * 0.8 + f.phase) * f.sway + wind) * dt;
-        if (f.y < BOX.yBottom) spawn(f, false);
-        if (f.x > BOX.x) f.x = -BOX.x;
-        else if (f.x < -BOX.x) f.x = BOX.x;
-      }
-    },
-  };
+/** Dibuja los copos detrás de todo (z muy negativa). */
+export function drawSnow(buf, flakes, t) {
+  const { cols, rows } = buf;
+  for (const s of flakes) {
+    const x = (s.x + Math.sin(t * 0.4 + s.d * 9) * 0.004) * cols;
+    const y = ((s.y + t * s.v) % 1) * rows;
+    buf.plot(x, y, -900, '+', `rgba(248,250,255,${(0.22 + s.d * s.d * 0.78).toFixed(2)})`);
+  }
 }

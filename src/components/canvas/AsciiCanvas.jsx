@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 import { AsciiBuffer } from '../../core/engine/AsciiBuffer';
 import { CanvasRenderer } from '../../core/engine/renderer';
 import { startLoop } from '../../core/engine/loop';
-import { Camera } from '../../core/geometry/camera';
 import { createTreeScene } from '../../core/engine/scenes/treeScene';
 
 /**
@@ -16,20 +15,16 @@ export default function AsciiCanvas({ className = '' }) {
   useEffect(() => {
     const wrap = wrapRef.current;
     const canvas = canvasRef.current;
+    const renderer = new CanvasRenderer(canvas);
     const buffer = new AsciiBuffer();
-    const camera = new Camera();
     const scene = createTreeScene();
-    let renderer = null;
-    let aspect = 0.5;
 
     const layout = () => {
       const { width, height } = wrap.getBoundingClientRect();
-      const fontSize = width < 500 ? 8 : 10;
-      if (!renderer || renderer.fontSize !== fontSize) renderer = new CanvasRenderer(canvas, { fontSize });
+      if (!width || !height) return;
       const grid = renderer.resize(width, height);
-      aspect = grid.aspect;
-      buffer.resize(grid.cols, grid.rows);
-      camera.fit(grid.cols, grid.rows, aspect);
+      buffer.resize(grid.cols, grid.rows, grid.aspect);
+      scene.layout(grid);
     };
     layout();
     const ro = new ResizeObserver(layout);
@@ -37,8 +32,8 @@ export default function AsciiCanvas({ className = '' }) {
 
     const stop = startLoop((dt, t) => {
       buffer.clear();
-      scene.render(buffer, camera, dt, t);
-      buffer.bloom(2, 0.8, aspect);
+      scene.render(buffer, dt, t);
+      buffer.resolveGlows(t);
       renderer.draw(buffer);
     });
 

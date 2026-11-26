@@ -1,61 +1,108 @@
+const FONT = "Menlo, Consolas, 'DejaVu Sans Mono', monospace";
+
+/** Columnas que ocupa la franja central de 9:16. La escena se diseña para este ancho. */
+export const PANEL_COLS = 124;
+
 /**
- * Dibuja un AsciiBuffer en un <canvas> 2D.
- * Mide la celda con la fuente real para que la rejilla encaje en píxeles.
+ * Dibuja un AsciiBuffer en un <canvas>.
+ *
+ * Rejilla: la franja central de 9:16 siempre tiene PANEL_COLS columnas, así que la
+ * fuente escala con la pantalla y la escena se ve igual en cualquier tamaño. Si la
+ * pantalla es más ancha, la rejilla se extiende a los lados con celdas del mismo tamaño.
+ *
+ * Brillo: los caracteres se pintan en un lienzo aparte y luego se superponen dos
+ * copias desenfocadas en modo `screen`. Todo resplandor sale de un carácter.
  */
 export class CanvasRenderer {
-  constructor(canvas, { fontSize = 14, fontFamily = "Menlo, Consolas, 'DejaVu Sans Mono', monospace" } = {}) {
+  constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.fontSize = fontSize;
-    this.font = `bold ${fontSize}px ${fontFamily}`;
-    this.dpr = 1;
-    this.measure();
+    this.off = document.createElement('canvas');
+    this.octx = this.off.getContext('2d');
+    this.bloom = supportsFilter(this.ctx);
   }
 
-  measure() {
-    this.ctx.font = this.font;
-    this.cellW = Math.ceil(this.ctx.measureText('M').width);
-    this.cellH = Math.ceil(this.fontSize * 1.2);
-  }
-
-  /** Ajusta el canvas al tamaño CSS dado y devuelve cuántas columnas/filas caben. */
   resize(width, height) {
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width = Math.round(width * this.dpr);
-    this.canvas.height = Math.round(height * this.dpr);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = dpr;
+    this.W = width;
+    this.H = height;
+    this.PW = Math.min(width, Math.round((height * 9) / 16)); // ancho de la franja 9:16
+    this.CW = this.PW / PANEL_COLS;
+    this.CH = this.CW * 1.62;
+    const X0 = (width - this.PW) / 2;
+    const side = Math.ceil(X0 / this.CW - 1e-6);
+    this.GX0 = X0 - side * this.CW;
+
+    for (const c of [this.canvas, this.off]) {
+      c.width = Math.round(width * dpr);
+      c.height = Math.round(height * dpr);
+    }
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
-    this.measure();
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const bg = this.ctx.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, '#323a47');
+    bg.addColorStop(0.55, '#394250');
+    bg.addColorStop(0.86, '#4b5463');
+    bg.addColorStop(1, '#666e7d');
+    this.bg = bg;
+
     return {
-      cols: Math.floor(width / this.cellW),
-      rows: Math.floor(height / this.cellH),
-      // Ancho/alto de una celda: para corregir la proyección (las celdas no son cuadradas).
-      aspect: this.cellW / this.cellH,
+      cols: PANEL_COLS + 2 * side,
+      rows: Math.max(1, Math.floor(height / this.CH)),
+      aspect: this.CW / this.CH,
+      panelCols: PANEL_COLS,
     };
   }
 
   draw(buffer) {
-    const { ctx, cellW, cellH, dpr } = this;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, this.canvas.width / dpr, this.canvas.height / dpr);
-    ctx.font = this.font;
-    ctx.textBaseline = 'top';
+    const { ctx, octx, W, H, CW, CH, GX0 } = this;
 
-    // Centra la rejilla dentro del canvas.
-    const ox = Math.floor((this.canvas.width / dpr - buffer.cols * cellW) / 2);
-    const oy = Math.floor((this.canvas.height / dpr - buffer.rows * cellH) / 2);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = this.bg;
+    ctx.fillRect(0, 0, W, H);
 
-    let current = null;
+    octx.clearRect(0, 0, W, H);
+    octx.font = `bold ${Math.round(CH * 0.95)}px ${FONT}`;
+    octx.textBaseline = 'middle';
+    octx.textAlign = 'center';
     const { chars, colors, cols } = buffer;
+    let current = '';
     for (let i = 0; i < chars.length; i++) {
       const ch = chars[i];
-      if (ch === ' ') continue;
-      const color = colors[i] || '#fff';
-      if (color !== current) {
-        ctx.fillStyle = color;
-        current = color;
+      if (!ch) continue;
+      if (colors[i] !== current) {
+        current = colors[i];
+        octx.fillStyle = current;
       }
-      ctx.fillText(ch, ox + (i % cols) * cellW, oy + ((i / cols) | 0) * cellH);
+      octx.fillText(ch, GX0 + (i % cols) * CW + CW / 2, ((i / cols) | 0) * CH + CH / 2);
+    }
+    ctx.drawImage(this.off, 0, 0, W, H);
+
+    if (this.bloom) {
+      ctx.globalCompositeOperation = 'screen';
+      ctx.filter = `blur(${Math.max(2, Math.round(this.PW * 0.006))}px)`;
+      ctx.globalAlpha = 0.4;
+      ctx.drawImage(this.off, 0, 0, W, H);
+      ctx.filter = `blur(${Math.round(this.PW * 0.02)}px)`;
+      ctx.globalAlpha = 0.12;
+      ctx.drawImage(this.off, 0, 0, W, H);
+      ctx.filter = 'none';
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
+}
+
+/** Safari antiguo no soporta ctx.filter: sin él, el brillo se desactiva en vez de verse mal. */
+function supportsFilter(ctx) {
+  if (!('filter' in ctx)) return false;
+  ctx.filter = 'blur(1px)';
+  const ok = ctx.filter === 'blur(1px)';
+  ctx.filter = 'none';
+  return ok;
 }
