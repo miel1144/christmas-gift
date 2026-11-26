@@ -97,3 +97,38 @@ body {
 .msg.ok { color: var(--tree); }
 .msg.fail { color: var(--fail); }
 .pending { opacity: 0.5; }
+
+/* --- Escena ASCII --- */
+.scene {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(var(--bg-top) 0%, var(--bg-mid) 55%, var(--bg-low) 86%, var(--bg-bottom) 100%);
+}
+.ascii-wrap { position: absolute; inset: 0; }
+.ascii-canvas { display: block; touch-action: none; cursor: grab; }
+.ascii-canvas:active { cursor: grabbing; }
+
+.topbar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.topbar > * { pointer-events: auto; }
+.badge { margin-left: 0.6rem; padding: 0 0.4rem; color: var(--bg-top); background: var(--star); font-size: 0.7rem; }
+
+.hint {
+  position: absolute;
+  bottom: 12px; left: 0; right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  opacity: 0.5;
+  pointer-events: none;
+}
