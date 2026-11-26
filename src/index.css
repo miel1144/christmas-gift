@@ -41,3 +41,59 @@ body {
 .status .pending { opacity: 0.5; }
 
 .errors { color: var(--fail); font-size: 0.8rem; white-space: pre-wrap; max-width: 100%; }
+
+/* --- Formularios / paneles --- */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 340px;
+  padding: 1.25rem;
+  border: 1px dashed rgba(248, 250, 255, 0.35);
+  background: rgba(50, 58, 71, 0.55);
+}
+
+.panel-title { margin: 0; font-size: 1rem; text-align: center; color: var(--star); }
+
+.field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; }
+.field span { opacity: 0.75; }
+.field input {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--snow);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(248, 250, 255, 0.3);
+  padding: 0.55rem 0.6rem;
+  outline: none;
+}
+.field input:focus { border-color: var(--star); }
+.field input::placeholder { color: rgba(248, 250, 255, 0.35); }
+
+.btn {
+  font: inherit;
+  color: var(--bg-top);
+  background: var(--tree);
+  border: none;
+  padding: 0.6rem;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.1); }
+.btn:disabled { opacity: 0.6; cursor: wait; }
+
+.link {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--snow);
+  opacity: 0.75;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.link:hover { opacity: 1; }
+
+.msg { margin: 0; font-size: 0.8rem; }
+.msg.ok { color: var(--tree); }
+.msg.fail { color: var(--fail); }
+.pending { opacity: 0.5; }
