@@ -11,7 +11,7 @@ import { drawBaubles } from './baubles';
 import { drawGrowthRing } from './growthRing';
 import { drawStar } from './star';
 import { drawLightWave } from './lightWave';
-import { drawGifts } from './gifts';
+import { drawGifts, pickGift } from './gifts';
 import { createDust, drawDust } from './dust';
 
 /**
@@ -19,7 +19,7 @@ import { createDust, drawDust } from './dust';
  *   1. luz y disco · 2. árbol y estrella · 3. luces y regalos
  *
  * API: layout(grid) · render(buf, dt, t) · trigger(paso) · restart() ·
- *      setGifts(specs) · nudge(dx)
+ *      setGifts(specs) · pick(col, row) → id de regalo · nudge(dx)
  *
  * Profundidades (mayor = delante): nieve −900 · suelo −500 · tronco −5 ·
  * árbol ±rMax · bolas +7 · estrella 70.
@@ -30,6 +30,8 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
   const dust = createDust();
   let gifts = buildGifts(giftSpecs);
   let born = tree.baubles.map(() => null);
+  const boxes = []; // rectángulos de los regalos en pantalla (para hacer clic)
+  let lastT = 0;
 
   let L = null;
   let cell = null;
@@ -46,7 +48,19 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
     },
 
     setGifts(specs) {
-      gifts = buildGifts(specs);
+      // Los que ya estaban conservan su momento de entrada; los nuevos, si la intro
+      // ya repartió los regalos, saltan ahora mismo.
+      const prev = new Map(gifts.map((g) => [g.id, g.bornAt]));
+      const introDone = intro.local(2) >= T.giftAt;
+      gifts = buildGifts(specs).map((g) => {
+        if (g.id && prev.has(g.id)) g.bornAt = prev.get(g.id);
+        else if (introDone) g.bornAt = lastT;
+        return g;
+      });
+    },
+
+    pick(col, row) {
+      return pickGift(boxes, col, row);
     },
 
     trigger(step) {
@@ -56,6 +70,7 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
     restart() {
       intro.restart();
       born = tree.baubles.map(() => null);
+      gifts.forEach((g) => { g.bornAt = undefined; });
     },
 
     get mode() {
@@ -68,6 +83,7 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
 
     render(buf, dt, t) {
       if (!L) return;
+      lastT = t;
       intro.update(t);
       spin *= Math.exp(-dt * 2.5);
       angle += (0.5 + spin) * dt;
@@ -79,7 +95,7 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
         settle: Math.max(0, s2 - (T.grow[0] + 0.78 * (T.grow[1] - T.grow[0]))) * 0.5,
         wave: waveProgress(s3),
         points: tree.points, envelope: tree.envelope,
-        baubles: tree.baubles, born, gifts, dust, cell,
+        baubles: tree.baubles, born, gifts, boxes, dust, cell,
       };
 
       drawSnow(buf, flakes, t);

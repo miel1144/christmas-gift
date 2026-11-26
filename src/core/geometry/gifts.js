@@ -1,4 +1,5 @@
 import { TAU, seeded } from '../../utils/math';
+import { hashString } from '../../utils/giftSpec';
 
 /**
  * Cajas de regalo como nubes de puntos 3D: cuatro caras, tapa, cinta en cruz y
@@ -6,7 +7,13 @@ import { TAU, seeded } from '../../utils/math';
  *
  * Unidades: múltiplos de rMax. y hacia arriba desde el suelo.
  *
- * spec: { size: 's'|'m'|'l'|'flat'|'tall', body: [tono, saturación], ribbon: [tono, saturación] }
+ * spec: {
+ *   id?,                     identificador (también da la semilla: la caja siempre sale igual)
+ *   size: 's'|'m'|'l'|'flat'|'tall',
+ *   body: [tono, sat], ribbon: [tono, sat],
+ *   a?, rg?,                 ángulo y radio alrededor del tronco (si faltan, se reparten solos)
+ *   opened?, mine?           abierto (sin tapa ni moño) · es para mí y sin abrir (brilla)
+ * }
  */
 const SIZES = {
   s: [0.18, 0.18, 0.15],
@@ -17,13 +24,13 @@ const SIZES = {
 };
 
 export function buildGifts(specs = [], seed = 5) {
-  const rand = seeded(seed);
   const n = specs.length;
 
   return specs.map((spec, gi) => {
+    const rand = seeded(spec.id ? hashString(spec.id) : seed + gi);
     const [w, d, h] = SIZES[spec.size] ?? SIZES.m;
-    const a = ((gi + 0.5) / n) * TAU + (rand() - 0.5) * 0.4;
-    const rg = 0.88 + (gi % 2) * 0.16 + rand() * 0.04; // alternan más cerca y más lejos
+    const a = spec.a ?? ((gi + 0.5) / n) * TAU + (rand() - 0.5) * 0.4;
+    const rg = spec.rg ?? 0.88 + (gi % 2) * 0.16 + rand() * 0.04; // alternan más cerca y más lejos
     const yaw = rand() * 1.6;
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
 
@@ -32,6 +39,10 @@ export function buildGifts(specs = [], seed = 5) {
     const BOW = 90;
     const rw = 0.15 * Math.min(w, d); // medio ancho de la cinta
     const g = {
+      id: spec.id ?? null,
+      opened: Boolean(spec.opened),
+      mine: Boolean(spec.mine),
+      h,
       a, rg,
       body: spec.body ?? [356, 88],
       ribbon: spec.ribbon ?? [46, 100],

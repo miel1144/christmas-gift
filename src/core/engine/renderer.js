@@ -61,6 +61,11 @@ export class CanvasRenderer {
     };
   }
 
+  /** Píxeles CSS dentro del canvas → celda de la rejilla. */
+  toCell(px, py) {
+    return { col: Math.floor((px - this.GX0) / this.CW), row: Math.floor(py / this.CH) };
+  }
+
   draw(buffer) {
     const { ctx, octx, W, H, CW, CH, GX0 } = this;
 
