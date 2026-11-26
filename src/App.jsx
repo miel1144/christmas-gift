@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { initAuth, useAuthStore } from './store/authStore';
-import { useRoute } from './hooks/useRoute';
+import { navigate, useRoute } from './hooks/useRoute';
 import AuthScreen from './components/auth/AuthScreen';
 import Lobby from './components/layout/Lobby';
 import RoomView from './components/layout/RoomView';
 import JoinRoom from './components/layout/JoinRoom';
+import ResetPassword from './components/auth/ResetPassword';
+import { arrivedFromRecovery } from './services/supabase/auth';
 
 // El diagnóstico de Supabase sigue disponible con testSupabase() en la consola.
 export default function App() {
@@ -13,7 +15,14 @@ export default function App() {
 
   useEffect(() => {
     initAuth();
+    // Si Supabase mandó el enlace de recuperación a otra ruta (p. ej. porque /reset no
+    // estaba en las Redirect URLs), igual se pide la contraseña nueva: si no, la
+    // sesión de recuperación entraría directa al lobby.
+    if (arrivedFromRecovery && window.location.pathname !== '/reset') navigate('/reset', { replace: true });
   }, []);
+
+  // /reset gestiona por sí misma la carga y la sesión de recuperación.
+  if (route.name === 'reset') return <ResetPassword />;
 
   if (status === 'loading') {
     return (
