@@ -3,6 +3,7 @@ import { useAuthStore } from '../../store/authStore';
 import { navigate } from '../../hooks/useRoute';
 import { useRoom } from '../../hooks/useRoom';
 import { giftToSpec } from '../../utils/giftSpec';
+import { giftErrorMessage, moveGift } from '../../services/supabase/gifts';
 import AsciiCanvas from '../canvas/AsciiCanvas';
 import TopBar from './TopBar';
 import MembersPanel from './MembersPanel';
@@ -17,7 +18,7 @@ export default function RoomView({ roomId }) {
     () => ({ id: session.user.id, name: profile?.display_name ?? session.user.email }),
     [session.user.id, session.user.email, profile?.display_name]
   );
-  const { status, room, members, gifts, online, error, refetchGifts, setRoom } = useRoom(roomId, me);
+  const { status, room, members, gifts, online, error, refetchGifts, refetchMembers, setRoom, notify, placeGiftLocally } = useRoom(roomId, me);
   const [panel, setPanel] = useState(null); // 'gifts' | 'members' | null
   const [letter, setLetter] = useState(null); // regalo abierto en el modal
   const [toast, setToast] = useState(null);
@@ -31,6 +32,19 @@ export default function RoomView({ roomId }) {
   useEffect(() => {
     if (status === 'ready' && !members.some((m) => m.id === me.id)) navigate('/?aviso=fuera', { replace: true });
   }, [status, members, me.id]);
+
+  // Cuando cambio mi nombre o avatar, el resto de la sala vuelve a pedir la lista de
+  // miembros (los perfiles no viajan por Realtime). La primera carga no cuenta.
+  const profileKey = profile ? `${profile.display_name}\n${profile.avatar_ascii ?? ''}` : null;
+  const lastProfileKey = useRef(profileKey);
+  useEffect(() => {
+    if (status !== 'ready' || profileKey === null) return;
+    if (lastProfileKey.current !== null && lastProfileKey.current !== profileKey) {
+      refetchMembers();
+      notify('profile');
+    }
+    lastProfileKey.current = profileKey;
+  }, [status, profileKey, refetchMembers, notify]);
 
   const showToast = (text) => {
     setToast(text);
@@ -64,6 +78,24 @@ export default function RoomView({ roomId }) {
     else showToast(`Regalo de ${nameOf(g.sender_id)} para ${nameOf(g.receiver_id)}`);
   };
 
+  // Solo quien envió un regalo puede moverlo (la política de la base también deja a
+  // los admins, pero en la sala cada cual coloca los suyos).
+  const canDragGift = useCallback((id) => gifts.some((g) => g.id === id && g.sender_id === me.id), [gifts, me.id]);
+  const onGiftMove = useCallback(
+    async (id, x, y) => {
+      placeGiftLocally(id, x, y);
+      try {
+        await moveGift(id, { x, y });
+      } catch (e) {
+        showToast(giftErrorMessage(e));
+        refetchGifts();
+      }
+    },
+    // showToast solo usa setters y una ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [placeGiftLocally, refetchGifts]
+  );
+
   if (status === 'loading') {
     return (
       <main className="stage">
@@ -88,7 +120,7 @@ export default function RoomView({ roomId }) {
 
   return (
     <main className="scene">
-      <AsciiCanvas gifts={specs} onGiftClick={onGiftClick} />
+      <AsciiCanvas gifts={specs} onGiftClick={onGiftClick} canDragGift={canDragGift} onGiftMove={onGiftMove} />
       <TopBar
         left={
           <>
@@ -110,7 +142,16 @@ export default function RoomView({ roomId }) {
       </div>
 
       {panel === 'members' && (
-        <MembersPanel room={room} members={members} online={online} me={me} onRoomChange={setRoom} onClose={() => setPanel(null)} />
+        <MembersPanel
+          room={room}
+          members={members}
+          online={online}
+          me={me}
+          onRoomChange={setRoom}
+          onMembersChange={refetchMembers}
+          notify={notify}
+          onClose={() => setPanel(null)}
+        />
       )}
       {panel === 'gifts' && (
         <GiftPanel
@@ -127,7 +168,7 @@ export default function RoomView({ roomId }) {
       {letter && <LetterModal gift={letter} me={me} nameOf={nameOf} onOpened={refetchGifts} onClose={() => setLetter(null)} />}
       {toast && <div className="toast" role="status">{toast}</div>}
       {error && <div className="toast fail" role="alert">{error}</div>}
-      <p className="hint">clic en un regalo para abrirlo · 1 · 2 · 3 pasos · R repetir · arrastra para girar</p>
+      <p className="hint">clic en un regalo para abrirlo · arrastra los tuyos para moverlos · 1 · 2 · 3 pasos · R repetir · arrastra el fondo para girar</p>
     </main>
   );
 }

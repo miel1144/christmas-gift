@@ -8,12 +8,20 @@ import { subscribeRoom } from '../services/supabase/realtime';
  *
  * status: 'loading' | 'ready' | 'missing' (no existe o es privada y no soy miembro) | 'error'
  * Si la sala es pública y aún no soy miembro, me une automáticamente.
+ *
+ * `notify(what)` avisa al resto de la sala de un cambio que no llega solo por
+ * Realtime ('room': nombre o visibilidad; 'profile': mi nombre o avatar).
  */
 export function useRoom(roomId, me) {
   const [state, setState] = useState({ status: 'loading', room: null, members: [], gifts: [], online: new Set(), error: null });
   const timers = useRef({});
+  const live = useRef(null);
   const meId = me?.id;
   const meName = me?.name;
+  // El nombre se lee al conectar; si cambia después, solo se actualiza la presencia
+  // (no hay que volver a cargar la sala entera).
+  const nameRef = useRef(meName);
+  nameRef.current = meName;
 
   const patch = (p) => setState((s) => ({ ...s, ...p }));
 
@@ -33,6 +41,15 @@ export function useRoom(roomId, me) {
     }
   }, [roomId]);
 
+  const refetchRoom = useCallback(async () => {
+    try {
+      const room = await getRoom(roomId);
+      if (room) patch({ room });
+    } catch (e) {
+      patch({ error: roomErrorMessage(e) });
+    }
+  }, [roomId]);
+
   // Agrupa ráfagas de eventos en una sola petición.
   const debounced = useCallback((key, fn) => {
     clearTimeout(timers.current[key]);
@@ -42,7 +59,6 @@ export function useRoom(roomId, me) {
   useEffect(() => {
     if (!meId) return undefined;
     let cancelled = false;
-    let unsubscribe = null;
     setState({ status: 'loading', room: null, members: [], gifts: [], online: new Set(), error: null });
 
     (async () => {
@@ -61,10 +77,14 @@ export function useRoom(roomId, me) {
         if (cancelled) return;
         patch({ status: 'ready', room, members, gifts });
 
-        unsubscribe = subscribeRoom(roomId, { id: meId, name: meName }, {
+        live.current = subscribeRoom(roomId, { id: meId, name: nameRef.current }, {
           onGifts: () => debounced('gifts', refetchGifts),
           onMembers: () => debounced('members', refetchMembers),
           onPresence: (online) => patch({ online }),
+          onChanged: (what) => {
+            if (what === 'room') debounced('room', refetchRoom);
+            else if (what === 'profile') debounced('members', refetchMembers);
+          },
         });
       } catch (e) {
         if (!cancelled) patch({ status: 'error', error: roomErrorMessage(e) });
@@ -73,11 +93,22 @@ export function useRoom(roomId, me) {
 
     return () => {
       cancelled = true;
-      unsubscribe?.();
+      live.current?.close();
+      live.current = null;
       Object.values(timers.current).forEach(clearTimeout);
     };
-  }, [roomId, meId, meName, refetchGifts, refetchMembers, debounced]);
+  }, [roomId, meId, refetchGifts, refetchMembers, refetchRoom, debounced]);
 
-  const setRoom = (room) => patch({ room });
-  return { ...state, refetchGifts, refetchMembers, setRoom };
+  useEffect(() => {
+    if (meName) live.current?.track(meName);
+  }, [meName]);
+
+  const setRoom = useCallback((room) => patch({ room }), []);
+  const notify = useCallback((what) => live.current?.notify(what), []);
+  /** Cambio optimista de la posición de un regalo (antes de que confirme la base). */
+  const placeGiftLocally = useCallback(
+    (id, x, y) => setState((s) => ({ ...s, gifts: s.gifts.map((g) => (g.id === id ? { ...g, position_x: x, position_y: y } : g)) })),
+    []
+  );
+  return { ...state, refetchGifts, refetchMembers, refetchRoom, setRoom, notify, placeGiftLocally };
 }

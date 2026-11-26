@@ -11,6 +11,8 @@ import { createTreeScene } from '../../core/engine/scenes/tree';
  *   (pasa a modo manual) y R la repite.
  * - Arrastrar con ratón o dedo hace girar el árbol; un clic sobre un regalo
  *   llama a `onGiftClick(id)`.
+ * - Si `canDragGift(id)` dice que sí, arrastrar ese regalo lo mueve por el suelo
+ *   (el árbol se para mientras tanto) y al soltarlo llama a `onGiftMove(id, ángulo, radio)`.
  *
  * `gifts`: especificaciones de cajas (ver core/geometry/gifts.js).
  * `sceneFactory`: otra escena (p. ej. solo nieve). `interactive={false}`: fondo decorativo,
@@ -19,12 +21,23 @@ import { createTreeScene } from '../../core/engine/scenes/tree';
  */
 const CLICK_SLOP = 5; // px que se puede mover el puntero y seguir contando como clic
 
-export default function AsciiCanvas({ className = '', gifts = [], onGiftClick, sceneFactory = createTreeScene, interactive = true, anchorRef, label }) {
+export default function AsciiCanvas({
+  className = '',
+  gifts = [],
+  onGiftClick,
+  canDragGift,
+  onGiftMove,
+  sceneFactory = createTreeScene,
+  interactive = true,
+  anchorRef,
+  label,
+}) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
-  const onGiftClickRef = useRef(onGiftClick);
-  onGiftClickRef.current = onGiftClick;
+  // Los manejadores se leen en cada evento: así pueden cambiar sin rehacer la escena.
+  const handlers = useRef({});
+  handlers.current = { onGiftClick, canDragGift, onGiftMove };
 
   useEffect(() => {
     sceneRef.current?.setGifts?.(gifts);
@@ -67,38 +80,74 @@ export default function AsciiCanvas({ className = '', gifts = [], onGiftClick, s
       };
     }
 
-    const giftAt = (e) => {
+    const cellOf = (e) => {
       const rect = canvas.getBoundingClientRect();
-      const { col, row } = renderer.toCell(e.clientX - rect.left, e.clientY - rect.top);
+      return renderer.toCell(e.clientX - rect.left, e.clientY - rect.top);
+    };
+    const giftAt = (e) => {
+      const { col, row } = cellOf(e);
       return scene.pick?.(col, row) ?? null;
     };
+    const draggable = (id) => Boolean(id && handlers.current.canDragGift?.(id) && scene.beginDrag);
 
-    // Arrastre para girar; si casi no se movió, es un clic.
-    let lastX = null;
-    let startX = 0, startY = 0;
+    // Un gesto empieza en 'spin' (girar el árbol) o 'gift' (sobre un regalo mío).
+    // Hasta pasar CLICK_SLOP no se decide nada: si se suelta antes, es un clic.
+    let gesture = null; // { mode: 'spin' | 'gift', id, lastX, startX, startY, startCell, moving }
     const down = (e) => {
-      lastX = startX = e.clientX;
-      startY = e.clientY;
+      const id = giftAt(e);
+      gesture = {
+        mode: draggable(id) ? 'gift' : 'spin',
+        id,
+        lastX: e.clientX,
+        startX: e.clientX,
+        startY: e.clientY,
+        startCell: cellOf(e),
+        moving: false,
+      };
       canvas.setPointerCapture(e.pointerId);
     };
     const move = (e) => {
-      if (lastX === null) {
-        canvas.style.cursor = onGiftClickRef.current && giftAt(e) ? 'pointer' : '';
+      if (!gesture) {
+        const id = giftAt(e);
+        canvas.style.cursor = draggable(id) ? 'grab' : id && handlers.current.onGiftClick ? 'pointer' : '';
         return;
       }
-      scene.nudge((e.clientX - lastX) * 0.02);
-      lastX = e.clientX;
+      if (!gesture.moving && Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY) >= CLICK_SLOP) {
+        gesture.moving = true;
+        if (gesture.mode === 'gift') {
+          const { col, row } = gesture.startCell;
+          if (!scene.beginDrag(gesture.id, col, row)) gesture.mode = 'spin';
+          else canvas.style.cursor = 'grabbing';
+        }
+      }
+      if (!gesture.moving) return;
+      if (gesture.mode === 'gift') {
+        const { col, row } = cellOf(e);
+        scene.dragTo(col, row);
+      } else {
+        scene.nudge((e.clientX - gesture.lastX) * 0.02);
+      }
+      gesture.lastX = e.clientX;
     };
     const up = (e) => {
-      const wasClick = lastX !== null && Math.hypot(e.clientX - startX, e.clientY - startY) < CLICK_SLOP;
-      lastX = null;
-      if (wasClick && onGiftClickRef.current) {
+      const g = gesture;
+      gesture = null;
+      if (!g) return;
+      if (g.moving && g.mode === 'gift') {
+        canvas.style.cursor = 'grab';
+        const r = scene.endDrag();
+        if (r) handlers.current.onGiftMove?.(r.id, r.a, r.rg);
+        return;
+      }
+      if (!g.moving && handlers.current.onGiftClick) {
         const id = giftAt(e);
-        if (id) onGiftClickRef.current(id);
+        if (id) handlers.current.onGiftClick(id);
       }
     };
     const cancel = () => {
-      lastX = null;
+      if (gesture?.moving && gesture.mode === 'gift') scene.cancelDrag?.();
+      gesture = null;
+      canvas.style.cursor = '';
     };
     canvas.addEventListener('pointerdown', down);
     canvas.addEventListener('pointermove', move);

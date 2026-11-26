@@ -326,3 +326,59 @@ body {
   .auth-tree { display: none; }
 }
 .msg.notice { padding: 0.5rem 0.8rem; border: 1px dashed var(--star); color: var(--star); background: var(--surface); }
+
+/* --- Perfil y avatares ASCII --- */
+.who-name { font-size: inherit; opacity: 1; text-decoration: none; border-bottom: 1px dashed var(--line); }
+.who-name:hover { border-bottom-color: var(--star); color: var(--star); }
+
+.avatar {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 0.6rem;
+  line-height: 1.05;
+  color: var(--star);
+  white-space: pre;
+}
+.avatar-empty { display: inline-block; width: 7ch; height: 3.15em; font-size: 0.6rem; border: 1px dashed rgba(248, 250, 255, 0.15); }
+
+.avatar-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(4.6rem, 1fr)); gap: 0.4rem; }
+.avatar-pick {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.4rem;
+  padding: 0.35rem;
+  color: var(--snow);
+  background: rgba(248, 250, 255, 0.03);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.avatar-pick .avatar { font-size: 0.7rem; }
+.avatar-pick:hover { border-color: var(--star); }
+.avatar-pick.active { border-color: var(--star); background: rgba(242, 182, 50, 0.08); }
+.avatar-pick:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; }
+.avatar-none { font-size: 0.75rem; color: var(--muted); }
+
+.field textarea.avatar-editor {
+  min-height: 0;
+  width: 10ch;
+  resize: none;
+  font-family: var(--font);
+  line-height: 1.2;
+  white-space: pre;
+  overflow: hidden;
+}
+.avatar-preview { display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem; border: 1px dashed rgba(248, 250, 255, 0.15); }
+.avatar-preview .avatar { font-size: 0.85rem; }
+.avatar-preview-name { overflow-wrap: anywhere; }
+
+/* --- Miembros y ajustes de la sala --- */
+.member-row { align-items: center; }
+.member { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.member-name { overflow-wrap: anywhere; }
+.member-actions { flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.5rem; }
+.settings { gap: 0.6rem; padding-top: 0.4rem; border-top: 1px dashed rgba(248, 250, 255, 0.12); }
+.settings-rename { align-items: flex-end; flex-wrap: nowrap; }
+.grow { flex: 1; }
+.settings-rename .btn { flex-shrink: 0; }

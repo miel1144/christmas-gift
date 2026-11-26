@@ -50,3 +50,15 @@ export async function fetchProfile(userId) {
   if (error) throw error;
   return data;
 }
+
+/** Guarda nombre y avatar. Devuelve el perfil actualizado. */
+export async function updateProfile(userId, { displayName, avatarAscii }) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ display_name: displayName, avatar_ascii: avatarAscii })
+    .eq('id', userId)
+    .select('id, email, display_name, role, avatar_ascii')
+    .single();
+  if (error) throw error;
+  return data;
+}

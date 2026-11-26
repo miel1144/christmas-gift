@@ -50,6 +50,17 @@ export async function openGift(giftId, password) {
   return data;
 }
 
+/** Mueve un regalo propio: x = ángulo alrededor del tronco, y = radio. */
+export async function moveGift(giftId, { x, y }) {
+  const { data, error } = await supabase
+    .from('gifts')
+    .update({ position_x: x, position_y: y })
+    .eq('id', giftId)
+    .select('id');
+  if (error) throw error;
+  if (!data.length) throw new Error('Solo puedes mover tus regalos.');
+}
+
 export async function deleteGift(giftId) {
   const { error } = await supabase.from('gifts').delete().eq('id', giftId);
   if (error) throw error;

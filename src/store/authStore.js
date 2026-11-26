@@ -22,6 +22,11 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
+  /** Tras guardar el perfil: lo deja en el store sin volver a pedirlo. */
+  setProfile(profile) {
+    if (get().session?.user.id === profile?.id) set({ profile, profileError: null });
+  },
+
   setSession(session) {
     const prevId = get().session?.user.id;
     set({ session, status: session ? 'signedIn' : 'signedOut' });

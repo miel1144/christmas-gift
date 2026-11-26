@@ -1,13 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { navigate } from '../../hooks/useRoute';
-import { deleteRoom, inviteLink, leaveRoom, regenerateInviteCode, roomErrorMessage } from '../../services/supabase/rooms';
+import {
+  deleteRoom,
+  inviteLink,
+  leaveRoom,
+  regenerateInviteCode,
+  roomErrorMessage,
+  setMemberRole,
+  updateRoom,
+} from '../../services/supabase/rooms';
 import { useConfirm } from '../ui/useConfirm';
 
 /**
- * Miembros (con quién está conectado), enlace para invitar, echar a alguien
- * (admins) y salir/borrar la sala.
+ * Miembros (con quién está conectado y su avatar), enlace para invitar y salir/borrar
+ * la sala. Los admins además pueden echar a alguien, nombrar o quitar admins y, en
+ * «ajustes», renombrar la sala o cambiar su visibilidad.
+ *
+ * `onRoomChange(room)`: la sala cambió (se aplica ya, sin esperar a recargar).
+ * `onMembersChange()`: volver a pedir la lista de miembros.
+ * `notify(what)`: avisa al resto de la sala (ver useRoom).
  */
-export default function MembersPanel({ room, members, online, me, onRoomChange, onClose }) {
+export default function MembersPanel({ room, members, online, me, onRoomChange, onMembersChange, notify, onClose }) {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -55,6 +68,23 @@ export default function MembersPanel({ room, members, online, me, onRoomChange, 
     run(async () => {
       await leaveRoom(room.id, m.id);
       setNotice(`${m.name} ya no está en la sala.`);
+    });
+  };
+
+  const changeRole = async (m, role) => {
+    if (role === 'admin') {
+      const ok = await confirm({
+        title: 'nombrar admin',
+        message: `¿Hacer admin a ${m.name}?`,
+        detail: 'Podrá renombrar la sala, cambiar su visibilidad, cambiar el enlace, echar a gente y nombrar o quitar admins. No podrá borrar la sala.',
+        confirmLabel: 'hacer admin',
+      });
+      if (!ok) return;
+    }
+    run(async () => {
+      await setMemberRole(room.id, m.id, role);
+      onMembersChange?.();
+      setNotice(role === 'admin' ? `${m.name} ahora es admin.` : `${m.name} ya no es admin.`);
     });
   };
 
@@ -110,17 +140,31 @@ export default function MembersPanel({ room, members, online, me, onRoomChange, 
 
       <ul className="list">
         {members.map((m) => {
-          const canKick = isAdmin && m.id !== me.id && m.id !== room.owner_id;
+          // Sobre quien creó la sala y sobre uno mismo no se actúa desde aquí.
+          const canManage = isAdmin && m.id !== me.id && m.id !== room.owner_id;
           return (
-            <li key={m.id} className="list-row">
-              <span>
-                <span className={`dot ${online.has(m.id) ? 'on' : ''}`} aria-label={online.has(m.id) ? 'en línea' : 'desconectado'} />
-                {m.name}
-                {m.id === me.id && <span className="muted"> (tú)</span>}
+            <li key={m.id} className="list-row member-row">
+              <span className="member">
+                {m.avatar ? <pre className="avatar" aria-hidden="true">{m.avatar}</pre> : <span className="avatar avatar-empty" aria-hidden="true" />}
+                <span className="member-name">
+                  <span className={`dot ${online.has(m.id) ? 'on' : ''}`} aria-label={online.has(m.id) ? 'en línea' : 'desconectado'} />
+                  {m.name}
+                  {m.id === me.id && <span className="muted"> (tú)</span>}
+                </span>
               </span>
-              <span className="tags">
+              <span className="tags member-actions">
                 {m.id === room.owner_id ? <span className="tag">dueño</span> : m.role === 'admin' && <span className="tag">admin</span>}
-                {canKick && (
+                {canManage && (
+                  <button
+                    className="link"
+                    disabled={busy}
+                    onClick={() => changeRole(m, m.role === 'admin' ? 'member' : 'admin')}
+                    aria-label={m.role === 'admin' ? `Quitar admin a ${m.name}` : `Hacer admin a ${m.name}`}
+                  >
+                    {m.role === 'admin' ? 'quitar admin' : 'hacer admin'}
+                  </button>
+                )}
+                {canManage && (
                   <button className="link" disabled={busy} onClick={() => kick(m)} aria-label={`Echar a ${m.name}`}>echar</button>
                 )}
               </span>
@@ -139,6 +183,10 @@ export default function MembersPanel({ room, members, online, me, onRoomChange, 
         )}
       </div>
 
+      {isAdmin && (
+        <RoomSettings room={room} busy={busy} run={run} confirm={confirm} setNotice={setNotice} onRoomChange={onRoomChange} notify={notify} />
+      )}
+
       {notice && <p className="msg ok" role="status">{notice}</p>}
       {error && <p className="msg fail" role="alert">{error}</p>}
 
@@ -151,5 +199,61 @@ export default function MembersPanel({ room, members, online, me, onRoomChange, 
       </div>
       {dialog}
     </aside>
+  );
+}
+
+const ROOM_NAME_MAX = 80;
+
+/** Ajustes de la sala (solo admins): nombre y visibilidad. */
+function RoomSettings({ room, busy, run, confirm, setNotice, onRoomChange, notify }) {
+  const [name, setName] = useState(room.name);
+  // Si otro admin la renombra, el campo se pone al día.
+  useEffect(() => setName(room.name), [room.name]);
+  const trimmed = name.trim();
+
+  const apply = async (fields, message) => {
+    const updated = await updateRoom(room.id, fields);
+    onRoomChange(updated);
+    notify?.('room');
+    setNotice(message);
+  };
+
+  const rename = (e) => {
+    e.preventDefault();
+    if (!trimmed || trimmed === room.name) return;
+    run(() => apply({ name: trimmed }, 'Nombre de la sala cambiado.'));
+  };
+
+  const toggleVisibility = async () => {
+    const toPublic = !room.is_public;
+    const ok = await confirm({
+      title: toPublic ? 'hacer pública' : 'hacer privada',
+      message: toPublic ? `¿Hacer pública "${room.name}"?` : `¿Hacer privada "${room.name}"?`,
+      detail: toPublic
+        ? 'Aparecerá en el lobby de todo el mundo y cualquiera podrá entrar sin invitación. Las cartas siguen siendo solo de quien las recibe.'
+        : 'Dejará de aparecer en el lobby. Quien ya está dentro se queda; para entrar de nuevo hará falta el enlace de invitación.',
+      confirmLabel: toPublic ? 'hacer pública' : 'hacer privada',
+    });
+    if (!ok) return;
+    run(() => apply({ isPublic: toPublic }, toPublic ? 'La sala ahora es pública.' : 'La sala ahora es privada: comparte el enlace de invitación.'));
+  };
+
+  return (
+    <section className="stack settings" aria-label="Ajustes de la sala">
+      <h3 className="sub">ajustes de la sala</h3>
+      <form className="row settings-rename" onSubmit={rename}>
+        <label className="field grow">
+          <span>nombre</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} maxLength={ROOM_NAME_MAX} required />
+        </label>
+        <button className="btn" type="submit" disabled={busy || !trimmed || trimmed === room.name}>guardar</button>
+      </form>
+      <div className="row">
+        <span className="muted">Ahora es <strong>{room.is_public ? 'pública' : 'privada'}</strong>.</span>
+        <button className="btn ghost" disabled={busy} onClick={toggleVisibility}>
+          {room.is_public ? 'hacer privada' : 'hacer pública'}
+        </button>
+      </div>
+    </section>
   );
 }

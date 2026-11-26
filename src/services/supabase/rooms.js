@@ -6,6 +6,7 @@ const MESSAGES = {
   'Not allowed': 'No tienes permiso para hacer eso.',
   'The room owner cannot be removed': 'La persona dueña de la sala no puede salir; puede borrarla.',
   'Not authenticated': 'Tu sesión caducó. Vuelve a entrar.',
+  'The room owner must stay admin': 'Quien creó la sala siempre es admin.',
 };
 
 export function roomErrorMessage(error) {
@@ -106,6 +107,32 @@ export async function regenerateInviteCode(roomId) {
   const { data, error } = await supabase.rpc('regenerate_invite_code', { p_workspace_id: roomId });
   if (error) throw error;
   return data;
+}
+
+/**
+ * Cambia nombre o visibilidad (solo admins). Si RLS lo bloquea, Postgres no da
+ * error: simplemente no actualiza nada, así que se pide la fila de vuelta.
+ */
+export async function updateRoom(roomId, { name, isPublic }) {
+  const fields = {};
+  if (name !== undefined) fields.name = name;
+  if (isPublic !== undefined) fields.is_public = isPublic;
+  const { data, error } = await supabase.from('workspaces').update(fields).eq('id', roomId).select(`${ROOM_FIELDS}, invite_code`);
+  if (error) throw error;
+  if (!data.length) throw new Error('Not allowed');
+  return data[0];
+}
+
+/** Nombrar o quitar admin. El trigger impide quitárselo a quien creó la sala. */
+export async function setMemberRole(roomId, userId, role) {
+  const { data, error } = await supabase
+    .from('workspace_members')
+    .update({ role })
+    .eq('workspace_id', roomId)
+    .eq('user_id', userId)
+    .select('user_id');
+  if (error) throw error;
+  if (!data.length) throw new Error('Not allowed');
 }
 
 export const inviteLink = (code) => `${window.location.origin}/join/${code}`;

@@ -8,6 +8,7 @@ import { T } from './timing';
  *   después (en vivo) aparecen con el mismo salto en cuanto existen (`bornAt`).
  * - Abiertos: sin moño y con la tapa apagada.
  * - Para mí y sin abrir: un halo dorado que late encima.
+ * - Mientras se arrastra (`dragging`): un halo fijo más fuerte.
  * - Guarda el rectángulo que ocupa cada caja en `boxes` para poder hacer clic.
  *
  * Caras de cara a la luz claras, las de espaldas muy oscuras; cinta y moño en su color.
@@ -64,7 +65,8 @@ export function drawGifts(buf, { L, angle, t, s3, gifts, boxes }) {
     const X = gx * cr + gz * sr, Z = gz * cr - gx * sr;
     const topX = cx + X * rMax, topY = floorRow + Z * rMax * floorTilt - g.h * rMax * aspect - 1.5;
     if (pop > 0) buf.addGlow(topX, topY, 46, pop * 1.1, 6);
-    if (g.mine) buf.addGlow(topX, topY, 46, 0.35 + 0.25 * Math.sin(t * 3 + gi), 5);
+    if (g.dragging) buf.addGlow(topX, topY, 46, 0.9, 7);
+    else if (g.mine) buf.addGlow(topX, topY, 46, 0.35 + 0.25 * Math.sin(t * 3 + gi), 5);
     if (g.id && x1 >= x0) boxes.push({ id: g.id, x0: x0 - 0.5, x1: x1 + 0.5, y0: y0 - 0.5, y1: y1 + 0.5, z: zMax });
   });
 }
