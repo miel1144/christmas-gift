@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { giftErrorMessage, openGift } from '../../services/supabase/gifts';
 import PasswordInput from '../ui/PasswordInput';
+import { play } from '../../core/audio/sfx';
 
 /**
  * Abre un regalo y muestra la carta.
@@ -19,6 +20,7 @@ export default function LetterModal({ gift, me, nameOf, onOpened, onClose }) {
     setError(null);
     try {
       setMessage(await openGift(gift.id, pw));
+      play('letter');
       if (gift.receiver_id === me.id && !gift.opened_at) onOpened?.();
     } catch (e) {
       setError(giftErrorMessage(e));

@@ -2,7 +2,7 @@ import { buildTree } from '../../../geometry/tree';
 import { buildGifts } from '../../../geometry/gifts';
 import { stageLayout } from '../../../geometry/layout';
 import { createSnow, drawSnow } from '../../../physics/snow';
-import { createIntro } from '../../intro';
+import { STEPS, createIntro } from '../../intro';
 import { T, growth, waveProgress } from './timing';
 import { drawFloor } from './floor';
 import { drawTrunk } from './trunk';
@@ -23,10 +23,14 @@ const DRAG_RG = [0.75, 1.5];
  * Escena del árbol con intro en 3 pasos:
  *   1. luz y disco · 2. árbol y estrella · 3. luces y regalos
  *
- * API: layout(grid) · render(buf, dt, t) · trigger(paso) · restart() ·
+ * API: layout(grid) · render(buf, dt, t) · trigger(paso) · restart(modo?) ·
  *      setGifts(specs) · pick(col, row) → id de regalo · nudge(dx) ·
  *      beginDrag(id, col, row) · dragTo(col, row) · endDrag() → { id, a, rg } · cancelDrag() ·
- *      hold(on)
+ *      hold(on) · started (pasos empezados, 0..3) · introDone
+ *
+ * `onEvent(nombre)` avisa de los momentos que suenan: 'drop' (cae la luz), 'disc' (se
+ * abre el disco), 'grow' (crece el árbol), 'star', 'lights' (bajan las luces), 'gift'
+ * (salta un regalo). Se lee en cada aviso, así que puede cambiar sin rehacer la escena.
  *
  * hold(true): el puntero está sobre un regalo; el árbol frena hasta pararse para
  * que sea fácil agarrarlo. Mientras se arrastra un regalo el árbol no gira nada,
@@ -35,7 +39,24 @@ const DRAG_RG = [0.75, 1.5];
  * Profundidades (mayor = delante): nieve −900 · suelo −500 · tronco −5 ·
  * árbol ±rMax · bolas +7 · estrella 70.
  */
-export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
+// Momentos de la intro que avisan por onEvent: [paso, segundo dentro del paso, nombre].
+const CUES = [
+  [0, 0, 'drop'],
+  [0, T.drop, 'disc'],
+  [1, 0, 'grow'],
+  [1, T.star[0], 'star'],
+  [2, 0, 'lights'],
+];
+
+export function createTreeScene({ gifts: giftSpecs = [], onEvent } = {}) {
+  const emit = (name) => {
+    try {
+      onEvent?.current?.(name);
+    } catch {
+      /* un fallo del sonido nunca para la escena */
+    }
+  };
+  let prevLocal = [-1, -1, -1];
   const tree = buildTree();
   const intro = createIntro();
   const dust = createDust();
@@ -93,7 +114,10 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
       const introDone = intro.local(2) >= T.giftAt;
       gifts = buildGifts(specs).map((g) => {
         if (g.id && prev.has(g.id)) g.bornAt = prev.get(g.id);
-        else if (introDone) g.bornAt = lastT;
+        else if (introDone) {
+          g.bornAt = lastT;
+          emit('gift');
+        }
         return g;
       });
       // Si llega una lista nueva a mitad de un arrastre, el regalo sigue en la mano.
@@ -154,14 +178,23 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
       intro.trigger(step);
     },
 
-    restart() {
-      intro.restart();
+    restart(mode) {
+      intro.restart(mode);
+      prevLocal = [-1, -1, -1];
       born = tree.baubles.map(() => null);
       gifts.forEach((g) => { g.bornAt = undefined; });
     },
 
     get mode() {
       return intro.mode;
+    },
+
+    get started() {
+      return intro.started;
+    },
+
+    get introDone() {
+      return intro.done;
     },
 
     nudge(dx) {
@@ -177,6 +210,20 @@ export function createTreeScene({ gifts: giftSpecs = [] } = {}) {
       if (!drag) angle += (0.5 * pace + spin) * dt;
 
       const s1 = intro.local(0), s2 = intro.local(1), s3 = intro.local(2);
+      const now = [s1, s2, s3];
+      // Un aviso por cada momento cruzado desde el fotograma anterior.
+      for (const [i, at, name] of CUES) {
+        if (prevLocal[i] < at && now[i] >= at && now[i] - at < 0.5) emit(name);
+      }
+      // Regalos de la intro: uno por hueco (los que llegan en vivo avisan en setGifts).
+      if (s3 >= T.giftAt && s3 < STEPS[2].duration + gifts.length * T.giftGap + 1) {
+        gifts.forEach((g, gi) => {
+          if (g.bornAt !== undefined && g.bornAt !== null) return;
+          const slot = T.giftAt + gi * T.giftGap;
+          if (prevLocal[2] < slot && s3 >= slot && s3 - slot < 0.5) emit('gift');
+        });
+      }
+      prevLocal = now;
       const F = growth(s2);
       const S = {
         L, angle, t, s1, s2, s3, F,

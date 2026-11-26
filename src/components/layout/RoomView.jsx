@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useAuthStore } from '../../store/authStore';
 import { navigate } from '../../hooks/useRoute';
 import { useRoom } from '../../hooks/useRoom';
@@ -9,6 +9,8 @@ import TopBar from './TopBar';
 import MembersPanel from './MembersPanel';
 import GiftPanel from '../gifts/GiftPanel';
 import LetterModal from '../gifts/LetterModal';
+import GestureCamera from '../camera/GestureCamera';
+import { isMuted, play, setMuted, subscribe } from '../../core/audio/sfx';
 
 /** Una sala: el árbol con sus regalos, miembros en vivo y el panel de regalos. */
 export default function RoomView({ roomId }) {
@@ -22,7 +24,10 @@ export default function RoomView({ roomId }) {
   const [panel, setPanel] = useState(null); // 'gifts' | 'members' | null
   const [letter, setLetter] = useState(null); // regalo abierto en el modal
   const [toast, setToast] = useState(null);
+  const [camera, setCamera] = useState(false);
   const toastTimer = useRef(null);
+  const sceneRef = useRef(null);
+  const muted = useSyncExternalStore(subscribe, isMuted);
 
   const specs = useMemo(() => gifts.map((g) => giftToSpec(g, me.id)), [gifts, me.id]);
   const nameOf = useCallback((id) => (id === me.id ? 'ti' : members.find((m) => m.id === id)?.name ?? 'alguien'), [members, me.id]);
@@ -76,6 +81,19 @@ export default function RoomView({ roomId }) {
     if (!g) return;
     if (g.receiver_id === me.id || g.sender_id === me.id) setLetter(g);
     else showToast(`Regalo de ${nameOf(g.sender_id)} para ${nameOf(g.receiver_id)}`);
+  };
+
+  // Corazón con las dos manos: abre mi regalo sin abrir más antiguo; si ya los abrí
+  // todos, el último que recibí; si no he recibido ninguno, el último que envié.
+  // Con una carta ya abierta no hace nada.
+  const onHeart = () => {
+    if (letter) return;
+    const byDate = (a, b) => String(a.created_at).localeCompare(String(b.created_at));
+    const received = gifts.filter((g) => g.receiver_id === me.id).sort(byDate);
+    const sent = gifts.filter((g) => g.sender_id === me.id).sort(byDate);
+    const next = received.find((g) => !g.opened_at) ?? received[received.length - 1] ?? sent[sent.length - 1];
+    if (next) setLetter(next);
+    else showToast('Todavía no tienes regalos en esta sala.');
   };
 
   // Solo quien envió un regalo puede moverlo (la política de la base también deja a
@@ -134,7 +152,15 @@ export default function RoomView({ roomId }) {
 
   return (
     <main className="scene">
-      <AsciiCanvas gifts={specs} onGiftClick={onGiftClick} canDragGift={canDragGift} onGiftMove={onGiftMove} onGiftLocked={onGiftLocked} />
+      <AsciiCanvas
+        gifts={specs}
+        onGiftClick={onGiftClick}
+        canDragGift={canDragGift}
+        onGiftMove={onGiftMove}
+        onGiftLocked={onGiftLocked}
+        onSceneEvent={play}
+        controlRef={sceneRef}
+      />
       <TopBar
         left={
           <>
@@ -144,12 +170,23 @@ export default function RoomView({ roomId }) {
           </>
         }
       >
+        <button
+          className="link"
+          onClick={() => setMuted(!muted)}
+          aria-pressed={!muted}
+          title={muted ? 'Activar el sonido' : 'Silenciar'}
+        >
+          {muted ? 'sonido: no' : 'sonido: sí'}
+        </button>
         <button className="link" onClick={() => toggle('members')}>
           {online.size} en línea · {members.length} {members.length === 1 ? 'miembro' : 'miembros'}
         </button>
       </TopBar>
 
       <div className="dock">
+        <button className="btn ghost" onClick={() => setCamera((c) => !c)} aria-pressed={camera}>
+          {camera ? 'cámara · on' : 'gestos'}
+        </button>
         <button className="btn" onClick={() => toggle('gifts')}>
           regalos{pending > 0 ? ` · ${pending} para ti` : ''}
         </button>
@@ -179,10 +216,11 @@ export default function RoomView({ roomId }) {
           onClose={() => setPanel(null)}
         />
       )}
+      {camera && <GestureCamera sceneRef={sceneRef} onHeart={onHeart} onClose={() => setCamera(false)} />}
       {letter && <LetterModal gift={letter} me={me} nameOf={nameOf} onOpened={refetchGifts} onClose={() => setLetter(null)} />}
       {toast && <div className="toast" role="status">{toast}</div>}
       {error && <div className="toast fail" role="alert">{error}</div>}
-      <p className="hint">clic en un regalo para abrirlo · arrastra los tuyos para moverlos · 1 · 2 · 3 pasos · R repetir · arrastra el fondo para girar</p>
+      <p className="hint">clic en un regalo para abrirlo · arrastra los tuyos para moverlos · 1 · 2 · 3 pasos · R repetir · arrastra el fondo para girar · «gestos» para usar la cámara</p>
     </main>
   );
 }

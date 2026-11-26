@@ -5,7 +5,7 @@
  *
  * - Modo 'auto' (por defecto): cada paso arranca cuando termina el anterior.
  * - Modo 'manual': un paso arranca solo cuando se pide con trigger(i) (teclas
- *   1–3 ahora, gestos más adelante). Pedir un paso salta los anteriores que
+ *   1–3 o gestos con la cámara). Pedir un paso salta los anteriores que
  *   falten, pero cada uno espera a que acabe el previo: nunca se pisan.
  *
  * `local(i)` devuelve los segundos desde que empezó el paso i (negativo si aún no).
@@ -47,10 +47,25 @@ export function createIntro({ mode = 'auto' } = {}) {
       }
     },
 
-    /** Vuelve a empezar en el modo actual (auto: se reproduce sola otra vez). */
-    restart() {
+    /**
+     * Vuelve a empezar. Sin `nextMode` sigue en el modo actual (auto: se reproduce
+     * sola otra vez); con 'manual' se queda esperando a que se pida el paso 1.
+     */
+    restart(nextMode) {
+      if (nextMode) mode = nextMode;
       starts = STEPS.map(() => null);
       origin = now;
+    },
+
+    /** Cuántos pasos han empezado ya (0..3). */
+    get started() {
+      return starts.filter((s) => s !== null && s <= now).length;
+    },
+
+    /** La intro terminó: el último paso empezó y ya pasó su duración. */
+    get done() {
+      const i = STEPS.length - 1;
+      return starts[i] !== null && now - starts[i] >= STEPS[i].duration;
     },
 
     local(i) {

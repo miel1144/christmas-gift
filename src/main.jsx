@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import './services/supabase/test-connection';
+import { installAudioUnlock } from './core/audio/sfx';
+
+installAudioUnlock();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

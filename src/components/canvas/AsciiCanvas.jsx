@@ -16,6 +16,10 @@ import { createTreeScene } from '../../core/engine/scenes/tree';
  *   (el árbol se para mientras tanto) y al soltarlo llama a `onGiftMove(id, ángulo, radio)`.
  *   Arrastrar un regalo que no se puede mover no gira el árbol: llama a `onGiftLocked(id)`.
  *
+ * `onSceneEvent(nombre)`: momentos de la escena que suenan (ver scenes/tree).
+ * `controlRef`: recibe la escena (trigger, nudge, restart...) para que la
+ * manejen otros controles, como los gestos con cámara.
+ *
  * `gifts`: especificaciones de cajas (ver core/geometry/gifts.js).
  * `sceneFactory`: otra escena (p. ej. solo nieve). `interactive={false}`: fondo decorativo,
  * sin ratón ni teclado. `anchorRef`: elemento HTML cuya posición recibe la escena en
@@ -34,6 +38,8 @@ export default function AsciiCanvas({
   interactive = true,
   anchorRef,
   label,
+  onSceneEvent,
+  controlRef,
 }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
@@ -41,6 +47,8 @@ export default function AsciiCanvas({
   // Los manejadores se leen en cada evento: así pueden cambiar sin rehacer la escena.
   const handlers = useRef({});
   handlers.current = { onGiftClick, canDragGift, onGiftMove, onGiftLocked };
+  const eventRef = useRef(null);
+  eventRef.current = onSceneEvent;
 
   useEffect(() => {
     sceneRef.current?.setGifts?.(gifts);
@@ -51,8 +59,9 @@ export default function AsciiCanvas({
     const canvas = canvasRef.current;
     const renderer = new CanvasRenderer(canvas);
     const buffer = new AsciiBuffer();
-    const scene = sceneFactory({ gifts });
+    const scene = sceneFactory({ gifts, onEvent: eventRef });
     sceneRef.current = scene;
+    if (controlRef) controlRef.current = scene;
 
     const layout = () => {
       const box = wrap.getBoundingClientRect();
@@ -80,6 +89,7 @@ export default function AsciiCanvas({
         stop();
         ro.disconnect();
         sceneRef.current = null;
+        if (controlRef) controlRef.current = null;
       };
     }
 
@@ -185,6 +195,7 @@ export default function AsciiCanvas({
       canvas.removeEventListener('pointercancel', cancel);
       canvas.removeEventListener('pointerleave', leave);
       sceneRef.current = null;
+      if (controlRef) controlRef.current = null;
     };
     // La escena se crea una vez; los cambios de `gifts` llegan por setGifts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
