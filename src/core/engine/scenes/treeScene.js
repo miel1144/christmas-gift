@@ -3,7 +3,7 @@ import {
   buildGarlands,
   buildOrnaments,
   buildTrunk,
-  buildGround,
+  buildMat,
   TREE,
 } from '../../geometry/tree';
 import { createSnow } from '../../physics/snow';
@@ -20,8 +20,10 @@ const FOLIAGE_COLORS = GREEN_HUES.map((hue, k) =>
   })
 );
 const FROST = '#dfe8f2';
-const TRUNK_COLORS = ['hsl(24, 40%, 16%)', 'hsl(24, 42%, 24%)', 'hsl(26, 45%, 33%)'];
-const GROUND_COLORS = [0.35, 0.55, 0.75, 0.95].map((a) => `hsla(44, 60%, 68%, ${a})`);
+const TRUNK_COLORS = ['hsl(22, 38%, 26%)', 'hsl(24, 42%, 34%)', 'hsl(26, 46%, 43%)', 'hsl(28, 50%, 52%)'];
+// Tapete: café en sombra → ámbar iluminado; ribetes más dorados.
+const MAT_COLORS = Array.from({ length: 10 }, (_, i) => `hsl(${22 + i * 1.4}, ${45 + i * 3}%, ${12 + i * 3.2}%)`);
+const MAT_TRIM = Array.from({ length: 6 }, (_, i) => `hsl(36, ${62 + i * 3}%, ${30 + i * 5}%)`);
 const SNOW_COLORS = ['rgba(248,250,255,0.35)', 'rgba(248,250,255,0.65)', 'rgba(248,250,255,0.95)'];
 const STAR_CORE = '#fff6d8';
 const STAR_GOLD = 'hsl(44, 85%, 70%)';
@@ -50,7 +52,7 @@ export function createTreeScene() {
   const garlands = buildGarlands();
   const ornaments = buildOrnaments();
   const trunk = buildTrunk();
-  const ground = buildGround();
+  const mat = buildMat();
   const snow = createSnow();
 
   let angle = 0;
@@ -102,13 +104,19 @@ export function createTreeScene() {
       const sn = Math.sin(angle);
       const rot = (x, z) => [x * cs - z * sn, x * sn + z * cs];
 
-      // Suelo.
-      for (const g of ground) {
-        const [x, z] = rot(g.x, g.z);
-        const p = cam.project(x, g.y, z);
+      // Tapete: la luz depende de la posición en pantalla (izquierda y delante más claro).
+      for (const m of mat) {
+        const [x, z] = rot(m.x, m.z);
+        const p = cam.project(x, m.y, z);
         if (!p) continue;
-        const ch = g.patch > 0.6 ? '#' : '+';
-        buf.plot(p.col, p.row, p.invZ, ch, pick(GROUND_COLORS, 1 - g.r * 0.9));
+        const lit = clamp01(0.55 - x * 0.22 - z * 0.18 + (m.jitter - 0.5) * 0.12);
+        if (m.zone === 'body') {
+          const ch = m.jitter > 0.8 ? '+' : m.jitter > 0.65 ? '=' : '#';
+          // Sombra del árbol: el centro del tapete más oscuro, así el tronco resalta.
+          buf.plot(p.col, p.row, p.invZ, ch, pick(MAT_COLORS, lit * (0.35 + 0.75 * Math.min(1, m.u * 1.4))));
+        } else {
+          buf.plot(p.col, p.row, p.invZ, m.zone === 'edge' ? '#' : '=', pick(MAT_TRIM, lit));
+        }
       }
 
       // Tronco (casi todo queda tapado por las ramas bajas).
@@ -116,8 +124,9 @@ export function createTreeScene() {
         const [x, z] = rot(q.x, q.z);
         const p = cam.project(x, q.y, z);
         if (!p) continue;
-        const lit = 0.5 - 0.5 * Math.sin(q.a + angle);
-        buf.plot(p.col, p.row, p.invZ, lit > 0.5 ? 'H' : '#', pick(TRUNK_COLORS, lit));
+        // Lado izquierdo iluminado, como el follaje.
+        const lit = clamp01(0.5 - 0.5 * Math.cos(q.a + angle + 0.4));
+        buf.plot(p.col, p.row, p.invZ, lit > 0.6 ? 'H' : lit > 0.3 ? '#' : '|', pick(TRUNK_COLORS, lit));
       }
 
       // Follaje.
@@ -132,7 +141,7 @@ export function createTreeScene() {
         const occlusion = 0.3 + 0.7 * f.depth * f.depth; // el interior queda en sombra
         const light = (0.25 + 0.75 * lambert) * occlusion;
 
-        if (f.jitter > 0.982 && lambert > 0.55 && f.depth > 0.85) {
+        if (f.jitter > 0.975 && lambert > 0.5 && f.depth > 0.85) {
           buf.plot(p.col, p.row, p.invZ, '*', FROST);
           continue;
         }
@@ -141,7 +150,7 @@ export function createTreeScene() {
         buf.plot(p.col, p.row, p.invZ, ch, pick(palette, light + (f.hue - 0.5) * 0.08));
       }
 
-      // Guirnaldas (un poco por delante de las ramas en las que se apoyan).
+      // Listones (un poco por delante de las ramas en las que se apoyan).
       for (const b of garlands) {
         const [x, z] = rot(b.x, b.z);
         const p = cam.project(x, b.y, z);
@@ -156,7 +165,7 @@ export function createTreeScene() {
         const p = cam.project(x, o.y, z);
         if (!p) continue;
         const tw = 0.7 + 0.3 * Math.sin(t * 2 + o.phase);
-        buf.plot(p.col, p.row, p.invZ * 1.04, 'O', o.color, 0.6 * tw);
+        buf.plot(p.col, p.row, p.invZ * 1.04, 'O', o.color, 0.5 * tw);
       }
 
       drawStar(buf, cam, t, cam.aspect);

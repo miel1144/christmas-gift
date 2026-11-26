@@ -7,7 +7,7 @@
  * para el Z-buffer.
  */
 export class Camera {
-  constructor({ distance = 4.5, pitch = 0.22 } = {}) {
+  constructor({ distance = 4.5, pitch = 0.15 } = {}) {
     this.distance = distance;
     // Inclinación hacia abajo (rad): el suelo se ve como una elipse.
     this.pitch = pitch;
@@ -21,7 +21,7 @@ export class Camera {
   }
 
   /** Ajusta la escala para que `worldHeight` unidades ocupen `fill` del alto de la pantalla. */
-  fit(cols, rows, aspect, { worldHeight = 3.3, fill = 0.85, centerY = -0.2 } = {}) {
+  fit(cols, rows, aspect, { worldHeight = 3.6, fill = 0.9, centerY = -0.45 } = {}) {
     this.cols = cols;
     this.rows = rows;
     this.aspect = aspect;

@@ -12,7 +12,7 @@ export const TREE = {
   radius: 1.2,
   baseY: -1,
   tiers: 7,
-  trunkHeight: 0.16,
+  trunkHeight: 0.8,
 };
 
 /** PRNG con semilla (mulberry32). */
@@ -69,36 +69,40 @@ export function buildFoliage(count = 16000, rand = seeded(7)) {
   return pts;
 }
 
-export const GARLAND_COLORS = ['#b76bff', '#5aa8ff', '#ffb347', '#ff6fb5', '#4fe0d0', '#ffd95a'];
+// Listones: rosa, amarillo, azul y morado.
+export const GARLAND_COLORS = ['#ff6fb5', '#ffd95a', '#5aa8ff', '#b76bff'];
 
-/** Guirnaldas: cada una da una vuelta y pico colgando en festón. */
+/** Listones: cada uno da una vuelta y pico colgando en festón; dos filas de grosor. */
 export function buildGarlands(rand = seeded(11)) {
   const beads = [];
   const bands = [0.12, 0.3, 0.48, 0.66, 0.82];
   bands.forEach((h0, k) => {
     const color = GARLAND_COLORS[k % GARLAND_COLORS.length];
     const a0 = rand() * Math.PI * 2;
-    const n = Math.round(150 * (1 - h0) + 30);
+    const n = Math.round(220 * (1 - h0) + 40);
     for (let i = 0; i < n; i++) {
       const s = i / n;
       const a = a0 + s * Math.PI * 2.2;
       const sag = 0.035 * Math.abs(Math.sin(a * 3.5)); // festones
       const h = h0 + s * 0.05 - sag;
-      const r = outerRadius(Math.max(0, h), a) * 1.02;
-      beads.push({
-        x: Math.cos(a) * r,
-        y: TREE.baseY + h * TREE.height,
-        z: Math.sin(a) * r,
-        color,
-        phase: rand() * Math.PI * 2,
-        speed: 0.8 + rand() * 1.6,
-      });
+      for (const dh of [0, -0.012]) {
+        const r = outerRadius(Math.max(0, h + dh), a) * 1.02;
+        beads.push({
+          x: Math.cos(a) * r,
+          y: TREE.baseY + (h + dh) * TREE.height,
+          z: Math.sin(a) * r,
+          color,
+          phase: rand() * Math.PI * 2,
+          speed: 0.8 + rand() * 1.6,
+        });
+      }
     }
   });
   return beads;
 }
 
-export const ORNAMENT_COLORS = ['#ff4d5e', '#ffd36b', '#e8f0ff', '#ff9f4a', '#c48bff', '#6bc8ff'];
+// Bolas: todas rojas (dos tonos para que no se vean planas).
+export const ORNAMENT_COLORS = ['#ff3b4a', '#d62536'];
 
 /** Bolas sueltas en las puntas de las ramas. */
 export function buildOrnaments(count = 55, rand = seeded(23)) {
@@ -120,27 +124,34 @@ export function buildOrnaments(count = 55, rand = seeded(23)) {
 
 export function buildTrunk(rand = seeded(5)) {
   const pts = [];
-  for (let i = 0; i < 500; i++) {
+  for (let i = 0; i < 2600; i++) {
     const a = rand() * Math.PI * 2;
-    const r = 0.11 * (0.8 + 0.2 * rand());
+    const r = 0.19 * (0.85 + 0.15 * rand());
     pts.push({ x: Math.cos(a) * r, y: TREE.baseY - rand() * TREE.trunkHeight, z: Math.sin(a) * r, a });
   }
   return pts;
 }
 
-/** Suelo: elipse de nieve iluminada con manchas, más densa cerca del árbol. */
-export function buildGround(radius = 2.3, rand = seeded(31)) {
+/**
+ * Tapete café-ámbar bajo el árbol: disco relleno (anillos densos, sin huecos)
+ * con un ribete en el borde y otro interior para que se lea como tela.
+ */
+export const MAT = { radius: 1.35 };
+
+export function buildMat(rand = seeded(31)) {
   const pts = [];
   const y = TREE.baseY - TREE.trunkHeight;
-  for (let i = 0; i < 3200; i++) {
-    const r = radius * (0.25 + 0.75 * Math.sqrt(rand()));
-    const a = rand() * Math.PI * 2;
-    const x = Math.cos(a) * r;
-    const z = Math.sin(a) * r;
-    // Manchas: ruido barato con senos; fuera de ellas no hay punto.
-    const patch = Math.sin(x * 3.1 + 1.3) * Math.sin(z * 4.3 + 0.7) + 0.5 * Math.sin((x + z) * 7.7);
-    if (patch < -0.15) continue;
-    pts.push({ x, y, z, r: r / radius, patch });
+  const step = 0.028;
+  for (let r = step / 2; r <= MAT.radius; r += step) {
+    const n = Math.max(6, Math.round((Math.PI * 2 * r) / 0.024));
+    const off = rand() * Math.PI * 2;
+    const u = r / MAT.radius;
+    // Zonas: centro liso, ribete interior, cuerpo, borde.
+    const zone = u > 0.93 ? 'edge' : u > 0.7 && u < 0.76 ? 'trim' : 'body';
+    for (let i = 0; i < n; i++) {
+      const a = off + (i / n) * Math.PI * 2;
+      pts.push({ x: Math.cos(a) * r, y, z: Math.sin(a) * r, u, zone, jitter: rand() });
+    }
   }
   return pts;
 }

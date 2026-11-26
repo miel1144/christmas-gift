@@ -2,7 +2,8 @@
  * Copos de nieve en una caja 3D alrededor del árbol. Caen, se mecen con el
  * viento y reaparecen arriba al tocar el suelo.
  */
-const BOX = { x: 3.2, yTop: 2.4, yBottom: -1.25, zNear: -2.2, zFar: 3 };
+// yBottom = altura del tapete: los copos desaparecen al llegar al suelo (no se acumulan).
+const BOX = { x: 3.2, yTop: 2.4, yBottom: -1.8, zNear: -2.2, zFar: 3 };
 
 function spawn(flake, anywhere) {
   flake.x = (Math.random() * 2 - 1) * BOX.x;
