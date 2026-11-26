@@ -23,7 +23,8 @@ const SIZES = {
   tall: [0.19, 0.19, 0.42],
 };
 
-export function buildGifts(specs = [], seed = 5) {
+/** density: multiplica los puntos (para cajas dibujadas más grandes que en la sala). */
+export function buildGifts(specs = [], seed = 5, { density = 1 } = {}) {
   const n = specs.length;
 
   return specs.map((spec, gi) => {
@@ -35,7 +36,7 @@ export function buildGifts(specs = [], seed = 5) {
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
 
     const aTop = w * d, aX = d * h, aZ = w * h, total = aTop + 2 * aX + 2 * aZ;
-    const N = Math.round(900 + 9000 * total);
+    const N = Math.round((900 + 9000 * total) * density);
     const BOW = 90;
     const rw = 0.15 * Math.min(w, d); // medio ancho de la cinta
     const g = {

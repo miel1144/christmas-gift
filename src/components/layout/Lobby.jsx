@@ -3,6 +3,8 @@ import { useAuthStore } from '../../store/authStore';
 import { navigate } from '../../hooks/useRoute';
 import { createRoom, joinByCode, listMyRooms, listPublicRooms, roomErrorMessage } from '../../services/supabase/rooms';
 import TopBar from './TopBar';
+import AsciiCanvas from '../canvas/AsciiCanvas';
+import { createSnowScene } from '../../core/engine/scenes/snow';
 
 const TREE = `    *
    /.\\
@@ -16,6 +18,13 @@ export default function Lobby() {
   const [mine, setMine] = useState(null);
   const [publicRooms, setPublicRooms] = useState([]);
   const [error, setError] = useState(null);
+  // Aviso de un solo uso (?aviso=fuera): me sacaron de una sala o la borraron.
+  const [notice] = useState(() =>
+    new URLSearchParams(window.location.search).get('aviso') === 'fuera' ? 'Ya no estás en esa sala: te sacaron o la borraron.' : null
+  );
+  useEffect(() => {
+    if (notice) window.history.replaceState(null, '', '/');
+  }, [notice]);
 
   const load = useCallback(async () => {
     try {
@@ -36,8 +45,10 @@ export default function Lobby() {
 
   return (
     <main className="stage lobby">
+      <AsciiCanvas sceneFactory={createSnowScene} interactive={false} />
       <TopBar left={<span className="brand">christmas gift</span>} />
       <pre className="tree" aria-hidden="true">{TREE}</pre>
+      {notice && <p className="msg notice" role="status">{notice}</p>}
       {error && <p className="msg fail" role="alert">{error}</p>}
 
       <div className="lobby-grid">

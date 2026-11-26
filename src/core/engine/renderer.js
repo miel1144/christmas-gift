@@ -58,6 +58,12 @@ export class CanvasRenderer {
       rows: Math.max(1, Math.floor(height / this.CH)),
       aspect: this.CW / this.CH,
       panelCols: PANEL_COLS,
+      // Geometría en píxeles, para escenas que se alinean con elementos HTML.
+      width,
+      height,
+      cellW: this.CW,
+      cellH: this.CH,
+      originX: this.GX0,
     };
   }
 

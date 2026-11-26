@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { giftErrorMessage, openGift } from '../../services/supabase/gifts';
+import PasswordInput from '../ui/PasswordInput';
 
 /**
  * Abre un regalo y muestra la carta.
@@ -61,7 +62,7 @@ export default function LetterModal({ gift, me, nameOf, onOpened, onClose }) {
             <p className="muted">Este regalo tiene contraseña. {from} debería habértela dado.</p>
             <label className="field">
               <span>contraseña</span>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required autoComplete="off" />
+              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required autoComplete="off" />
             </label>
             {error && <p className="msg fail" role="alert">{error}</p>}
             <button className="btn" type="submit" disabled={busy || !password}>{busy ? '...' : '> abrir'}</button>

@@ -13,10 +13,13 @@ import { createTreeScene } from '../../core/engine/scenes/tree';
  *   llama a `onGiftClick(id)`.
  *
  * `gifts`: especificaciones de cajas (ver core/geometry/gifts.js).
+ * `sceneFactory`: otra escena (p. ej. solo nieve). `interactive={false}`: fondo decorativo,
+ * sin ratón ni teclado. `anchorRef`: elemento HTML cuya posición recibe la escena en
+ * `grid.anchor` (para colocar cosas a su alrededor).
  */
 const CLICK_SLOP = 5; // px que se puede mover el puntero y seguir contando como clic
 
-export default function AsciiCanvas({ className = '', gifts = [], onGiftClick }) {
+export default function AsciiCanvas({ className = '', gifts = [], onGiftClick, sceneFactory = createTreeScene, interactive = true, anchorRef, label }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
@@ -24,7 +27,7 @@ export default function AsciiCanvas({ className = '', gifts = [], onGiftClick })
   onGiftClickRef.current = onGiftClick;
 
   useEffect(() => {
-    sceneRef.current?.setGifts(gifts);
+    sceneRef.current?.setGifts?.(gifts);
   }, [gifts]);
 
   useEffect(() => {
@@ -32,19 +35,22 @@ export default function AsciiCanvas({ className = '', gifts = [], onGiftClick })
     const canvas = canvasRef.current;
     const renderer = new CanvasRenderer(canvas);
     const buffer = new AsciiBuffer();
-    const scene = createTreeScene({ gifts });
+    const scene = sceneFactory({ gifts });
     sceneRef.current = scene;
 
     const layout = () => {
-      const { width, height } = wrap.getBoundingClientRect();
-      if (!width || !height) return;
-      const grid = renderer.resize(width, height);
+      const box = wrap.getBoundingClientRect();
+      if (!box.width || !box.height) return;
+      const grid = renderer.resize(box.width, box.height);
+      const a = anchorRef?.current?.getBoundingClientRect();
+      if (a) grid.anchor = { x: a.left - box.left, y: a.top - box.top, w: a.width, h: a.height };
       buffer.resize(grid.cols, grid.rows, grid.aspect);
       scene.layout(grid);
     };
     layout();
     const ro = new ResizeObserver(layout);
     ro.observe(wrap);
+    if (anchorRef?.current) ro.observe(anchorRef.current);
 
     const stop = startLoop((dt, t) => {
       buffer.clear();
@@ -53,10 +59,18 @@ export default function AsciiCanvas({ className = '', gifts = [], onGiftClick })
       renderer.draw(buffer);
     });
 
+    if (!interactive) {
+      return () => {
+        stop();
+        ro.disconnect();
+        sceneRef.current = null;
+      };
+    }
+
     const giftAt = (e) => {
       const rect = canvas.getBoundingClientRect();
       const { col, row } = renderer.toCell(e.clientX - rect.left, e.clientY - rect.top);
-      return scene.pick(col, row);
+      return scene.pick?.(col, row) ?? null;
     };
 
     // Arrastre para girar; si casi no se movió, es un clic.
@@ -94,8 +108,8 @@ export default function AsciiCanvas({ className = '', gifts = [], onGiftClick })
     // Teclado: 1–3 pasos de la intro, R repetir. No interfiere si se escribe en un campo.
     const key = (e) => {
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')) return;
-      if (e.key >= '1' && e.key <= '3') scene.trigger(Number(e.key) - 1);
-      else if (e.key === 'r' || e.key === 'R') scene.restart();
+      if (e.key >= '1' && e.key <= '3') scene.trigger?.(Number(e.key) - 1);
+      else if (e.key === 'r' || e.key === 'R') scene.restart?.();
     };
     window.addEventListener('keydown', key);
 
@@ -114,8 +128,13 @@ export default function AsciiCanvas({ className = '', gifts = [], onGiftClick })
   }, []);
 
   return (
-    <div ref={wrapRef} className={`ascii-wrap ${className}`}>
-      <canvas ref={canvasRef} className="ascii-canvas" aria-label="Árbol de Navidad ASCII con los regalos de la sala" role="img" />
+    <div ref={wrapRef} className={`ascii-wrap ${interactive ? '' : 'backdrop'} ${className}`} aria-hidden={interactive ? undefined : true}>
+      <canvas
+        ref={canvasRef}
+        className="ascii-canvas"
+        role={interactive ? 'img' : undefined}
+        aria-label={interactive ? label ?? 'Árbol de Navidad ASCII con los regalos de la sala' : undefined}
+      />
     </div>
   );
 }

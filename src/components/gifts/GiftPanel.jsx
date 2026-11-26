@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { deleteGift, giftErrorMessage } from '../../services/supabase/gifts';
 import SendGiftForm from './SendGiftForm';
+import { useConfirm } from '../ui/useConfirm';
 
 /** Panel lateral de regalos: recibidos, enviados y formulario para enviar. */
 export default function GiftPanel({ room, gifts, members, me, nameOf, onRead, onChanged, onClose }) {
@@ -8,12 +9,22 @@ export default function GiftPanel({ room, gifts, members, me, nameOf, onRead, on
   const sent = gifts.filter((g) => g.sender_id === me.id);
   const [tab, setTab] = useState(received.some((g) => !g.opened_at) ? 'received' : 'send');
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [confirm, dialog] = useConfirm();
 
   const remove = async (g) => {
-    if (!window.confirm(`¿Borrar el regalo para ${nameOf(g.receiver_id)}? La carta se pierde.`)) return;
+    const ok = await confirm({
+      title: 'borrar regalo',
+      message: `¿Borrar el regalo para ${nameOf(g.receiver_id)}?`,
+      detail: g.opened_at ? 'Ya lo abrió, pero la carta desaparecerá también para esa persona.' : 'Todavía no lo ha abierto. La carta se perderá para siempre.',
+      confirmLabel: 'borrar',
+      danger: true,
+    });
+    if (!ok) return;
     setError(null);
     try {
       await deleteGift(g.id);
+      setNotice(`Regalo para ${nameOf(g.receiver_id)} borrado.`);
       onChanged();
     } catch (e) {
       setError(giftErrorMessage(e));
@@ -33,7 +44,7 @@ export default function GiftPanel({ room, gifts, members, me, nameOf, onRead, on
           ['sent', `enviados (${sent.length})`],
           ['send', 'enviar'],
         ].map(([id, label]) => (
-          <button key={id} role="tab" aria-selected={tab === id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>
+          <button key={id} role="tab" aria-selected={tab === id} className={`tab ${tab === id ? 'active' : ''}`} onClick={() => { setTab(id); setNotice(null); }}>
             {label}
           </button>
         ))}
@@ -85,14 +96,17 @@ export default function GiftPanel({ room, gifts, members, me, nameOf, onRead, on
           gifts={gifts}
           members={members}
           me={me}
-          onSent={() => {
+          onSent={(name) => {
             onChanged();
+            setNotice(`Tu regalo para ${name ?? 'esa persona'} ya está bajo el árbol.`);
             setTab('sent');
           }}
         />
       )}
 
+      {notice && <p className="msg ok" role="status">{notice}</p>}
       {error && <p className="msg fail" role="alert">{error}</p>}
+      {dialog}
     </aside>
   );
 }

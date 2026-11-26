@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createGift, giftErrorMessage } from '../../services/supabase/gifts';
 import { GIFT_COLORS, placeGift } from '../../utils/giftSpec';
+import PasswordInput from '../ui/PasswordInput';
 
 const MAX = 5000;
 
@@ -13,6 +14,7 @@ export default function SendGiftForm({ room, gifts, members, me, onSent }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [sentTo, setSentTo] = useState(null);
 
   if (others.length === 0) {
     return <p className="muted">Por ahora eres la única persona en esta sala. Invita a alguien desde «miembros» para poder enviarle un regalo.</p>;
@@ -24,10 +26,11 @@ export default function SendGiftForm({ room, gifts, members, me, onSent }) {
     setError(null);
     try {
       const { x, y } = placeGift(gifts);
-      await createGift({ roomId: room.id, receiverId: receiverId || others[0].id, message: message.trim(), password, color, x, y });
+      const to = receiverId || others[0].id;
+      await createGift({ roomId: room.id, receiverId: to, message: message.trim(), password, color, x, y });
       setMessage('');
       setPassword('');
-      onSent();
+      onSent(others.find((m) => m.id === to)?.name);
     } catch (err) {
       setError(giftErrorMessage(err));
     } finally {
@@ -66,7 +69,7 @@ export default function SendGiftForm({ room, gifts, members, me, onSent }) {
 
       <label className="field">
         <span>contraseña <span className="muted">(opcional)</span></span>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="sin contraseña" />
+        <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="sin contraseña" />
         <span className="muted small">Si pones una, tendrá que escribirla para leer la carta. Díselo por otro lado.</span>
       </label>
 

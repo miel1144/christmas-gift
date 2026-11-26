@@ -27,9 +27,9 @@ export default function RoomView({ roomId }) {
   const nameOf = useCallback((id) => (id === me.id ? 'ti' : members.find((m) => m.id === id)?.name ?? 'alguien'), [members, me.id]);
   const pending = gifts.filter((g) => g.receiver_id === me.id && !g.opened_at).length;
 
-  // Si me sacan de la sala o la borran, vuelvo al lobby.
+  // Si me sacan de la sala o la borran, vuelvo al lobby con un aviso.
   useEffect(() => {
-    if (status === 'ready' && !members.some((m) => m.id === me.id)) navigate('/', { replace: true });
+    if (status === 'ready' && !members.some((m) => m.id === me.id)) navigate('/?aviso=fuera', { replace: true });
   }, [status, members, me.id]);
 
   const showToast = (text) => {

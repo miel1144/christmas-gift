@@ -63,7 +63,7 @@ body {
 .row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
 
 .field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8rem; border: none; padding: 0; margin: 0; min-width: 0; }
-.field > span, .field > legend { opacity: 0.75; padding: 0; }
+.field > span:not(.password-input), .field > legend { opacity: 0.75; padding: 0; }
 .field input, .field select, .field textarea, .link-box {
   font: inherit;
   font-size: 0.95rem;
@@ -286,3 +286,43 @@ body {
   background: var(--surface);
 }
 .toast.fail { color: var(--fail); bottom: 80px; }
+
+/* --- Campo de contraseña con "ver" --- */
+.password-input { position: relative; display: block; }
+.field .password-input input { padding-right: 4.6rem; }
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--snow);
+  background: rgba(248, 250, 255, 0.08);
+  border: 1px solid var(--line);
+  padding: 0.15rem 0.45rem;
+  cursor: pointer;
+}
+.password-toggle:hover { border-color: var(--star); }
+.password-toggle[aria-pressed='true'] { color: var(--star); border-color: var(--star); }
+.password-toggle:focus-visible { outline: 2px solid var(--star); outline-offset: 1px; }
+
+/* --- Diálogo de confirmación --- */
+.modal.confirm { width: min(420px, 100%); border-color: var(--line); }
+.modal.confirm.danger { border-color: hsl(354, 60%, 52%); }
+.modal.confirm.danger .panel-title { color: var(--fail); }
+.confirm-message { margin: 0; font-size: 0.95rem; line-height: 1.45; }
+.confirm-actions { justify-content: flex-end; margin-top: 0.4rem; }
+.confirm-actions .btn { min-width: 7rem; }
+
+/* --- Fondos animados (login y lobby) --- */
+.ascii-wrap.backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.stage > :not(.backdrop) { position: relative; z-index: 1; }
+.stage > .topbar { position: absolute; z-index: 2; }
+
+/* Login en móvil: el formulario baja para dejar sitio a los 3 regalos de arriba. */
+@media (max-width: 759px) {
+  .auth { justify-content: flex-start; padding-top: 150px; }
+  .auth-tree { display: none; }
+}
+.msg.notice { padding: 0.5rem 0.8rem; border: 1px dashed var(--star); color: var(--star); background: var(--surface); }

@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { signIn, signUp, authErrorMessage } from '../../services/supabase/auth';
+import PasswordInput from '../ui/PasswordInput';
+import AsciiCanvas from '../canvas/AsciiCanvas';
+import { createLoginScene } from '../../core/engine/scenes/login';
 
 const TREE = `        *
        /.\\
@@ -19,6 +22,7 @@ export default function AuthScreen() {
   const [notice, setNotice] = useState(null);
 
   const isSignUp = mode === 'signUp';
+  const formRef = useRef(null);
 
   function switchMode() {
     setMode(isSignUp ? 'signIn' : 'signUp');
@@ -55,10 +59,11 @@ export default function AuthScreen() {
   }
 
   return (
-    <main className="stage">
-      <pre className="tree" aria-hidden="true">{TREE}</pre>
+    <main className="stage auth">
+      <AsciiCanvas sceneFactory={createLoginScene} interactive={false} anchorRef={formRef} />
+      <pre className="tree auth-tree" aria-hidden="true">{TREE}</pre>
 
-      <form className="panel" onSubmit={onSubmit}>
+      <form className="panel" onSubmit={onSubmit} ref={formRef}>
         <h1 className="panel-title">{isSignUp ? '[ crear cuenta ]' : '[ entrar ]'}</h1>
 
         {isSignUp && (
@@ -88,8 +93,7 @@ export default function AuthScreen() {
 
         <label className="field">
           <span>contraseña</span>
-          <input
-            type="password"
+          <PasswordInput
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required

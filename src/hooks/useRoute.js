@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 const listeners = new Set();
 
 export function navigate(path, { replace = false } = {}) {
-  if (path === window.location.pathname) return;
+  if (path === window.location.pathname + window.location.search) return;
   if (replace) window.history.replaceState(null, '', path);
   else window.history.pushState(null, '', path);
   listeners.forEach((fn) => fn());
