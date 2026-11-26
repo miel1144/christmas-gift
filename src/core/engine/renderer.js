@@ -43,11 +43,14 @@ export class CanvasRenderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.octx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // Mismo degradado que el resto de la app: los colores viven en index.css (--bg-*).
+    const css = getComputedStyle(document.documentElement);
+    const v = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
     const bg = this.ctx.createLinearGradient(0, 0, 0, height);
-    bg.addColorStop(0, '#323a47');
-    bg.addColorStop(0.55, '#394250');
-    bg.addColorStop(0.86, '#4b5463');
-    bg.addColorStop(1, '#666e7d');
+    bg.addColorStop(0, v('--bg-top', '#07080b'));
+    bg.addColorStop(0.55, v('--bg-mid', '#0d0f14'));
+    bg.addColorStop(0.86, v('--bg-low', '#161a21'));
+    bg.addColorStop(1, v('--bg-bottom', '#232831'));
     this.bg = bg;
 
     return {

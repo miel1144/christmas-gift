@@ -1,9 +1,9 @@
-/* Paleta del prompt original: atardecer gris azulado, no negro */
+/* Fondo: casi negro arriba, se aclara poco a poco hacia abajo (un toque frío) */
 :root {
-  --bg-top: #323a47;
-  --bg-mid: #394250;
-  --bg-low: #4b5463;
-  --bg-bottom: #666e7d;
+  --bg-top: #07080b;
+  --bg-mid: #0d0f14;
+  --bg-low: #161a21;
+  --bg-bottom: #232831;
   --snow: rgb(248, 250, 255);
   --tree: hsl(150, 60%, 45%);
   --star: hsl(44, 66%, 75%);
